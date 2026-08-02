@@ -5,6 +5,10 @@
 
 namespace {
 
+// Dropdown is drawn in Scene's overlay pass; keep a high layer if a caller
+// ever merges overlay commands into a sorted list with the main pass.
+constexpr int kDropdownOverlayLayer = 1000000;
+
 bool Hit(float px, float py, float x, float y, float w, float h) {
   return px >= x && px <= x + w && py >= y && py <= y + h;
 }
@@ -161,9 +165,11 @@ void Select::handle_messages(const MouseEvents& mouse,
 
   scroll_state_ = over_bar ? ComponentState::Hovered : ComponentState::Base;
 
-  if (open_ && mouse.wheel_delta != 0.f && ShowScroll()) {
+  if (open_ && mouse.wheel_delta != 0.f && !mouse.wheel_consumed &&
+      ShowScroll()) {
     scroll_offset_ -= mouse.wheel_delta * item_height;
     ClampScroll();
+    mouse.wheel_consumed = true;
   }
 
   hovered_index_ = -1;
@@ -248,7 +254,7 @@ void Select::build_draw_buffer() {
     return;
   }
 
-  const int drop_layer = layer + 1000;
+  const int drop_layer = kDropdownOverlayLayer;
   const float list_y = y + height;
   const float vp_w = ViewportWidth();
 
@@ -420,32 +426,38 @@ void Select::collect_overlay_draw(std::vector<DrawCommand*>& out) {
   const size_t base = 7;
   const int max_slots = MaxVisibleSlots();
 
-  out.push_back(&draw_command_buffer_[base]);      // drop bg
-  out.push_back(&draw_command_buffer_[base + 1]);  // clip
+  auto push_overlay = [&](DrawCommand& cmd) {
+    // Re-assert top layer after parent apply_draw_origin may have shifted it.
+    cmd.layer = kDropdownOverlayLayer;
+    out.push_back(&cmd);
+  };
+
+  push_overlay(draw_command_buffer_[base]);      // drop bg
+  push_overlay(draw_command_buffer_[base + 1]);  // clip
 
   for (int slot_i = 0; slot_i < visible_count_; ++slot_i) {
     const size_t slot = base + 3 + static_cast<size_t>(slot_i) * 2;
     DrawCommand& item_bg = draw_command_buffer_[slot];
     if (item_bg.color.a > 0.f && item_bg.width > 0.f) {
-      out.push_back(&item_bg);
+      push_overlay(item_bg);
     }
     DrawCommand& item_text = draw_command_buffer_[slot + 1];
     if (!item_text.text.empty()) {
-      out.push_back(&item_text);
+      push_overlay(item_text);
     }
   }
 
-  out.push_back(&draw_command_buffer_[base + 2]);  // unclip
+  push_overlay(draw_command_buffer_[base + 2]);  // unclip
 
   const size_t scroll_base = base + 3 + static_cast<size_t>(max_slots) * 2;
   if (scroll_base + 1 < draw_command_buffer_.size()) {
     DrawCommand& track = draw_command_buffer_[scroll_base];
     DrawCommand& thumb = draw_command_buffer_[scroll_base + 1];
     if (track.width > 0.f && track.height > 0.f && track.color.a > 0.f) {
-      out.push_back(&track);
+      push_overlay(track);
     }
     if (thumb.width > 0.f && thumb.height > 0.f && thumb.color.a > 0.f) {
-      out.push_back(&thumb);
+      push_overlay(thumb);
     }
   }
 }

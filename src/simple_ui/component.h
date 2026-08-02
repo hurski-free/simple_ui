@@ -23,7 +23,8 @@ public:
   virtual void collect_draw(std::vector<DrawCommand*>& out,
                             bool force_rebuild = false);
 
-  // Optional popups/overlays drawn after the main pass (above siblings / parent clip).
+  // Optional popups/overlays drawn in a separate pass after the main scene
+  // (always above every component, regardless of layer).
   virtual void collect_overlay_draw(std::vector<DrawCommand*>& out);
 
   // Marks the component static and builds the draw buffer once.

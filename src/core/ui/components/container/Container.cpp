@@ -460,22 +460,16 @@ void Container::handle_messages(const MouseEvents& mouse,
     return;
   }
 
-  if (over_view && mouse.wheel_delta != 0.f) {
-    if (m.show_y && m.content_h > m.viewport_h) {
-      scroll_offset_y_ -= mouse.wheel_delta * 40.f;
-    } else if (m.show_x && m.content_w > m.viewport_w) {
-      scroll_offset_x_ -= mouse.wheel_delta * 40.f;
-    }
-    ClampScroll(m);
-  }
-
   state = over_view ? ComponentState::Hovered : ComponentState::Base;
 
   if (!over_view) {
     return;
   }
 
-  for (Component* child : components) {
+  // Children first (topmost / later siblings first) so a nested scrollable
+  // under the cursor can consume the wheel before this container.
+  for (auto it = components.rbegin(); it != components.rend(); ++it) {
+    Component* child = *it;
     if (!child) {
       continue;
     }
@@ -487,6 +481,19 @@ void Container::handle_messages(const MouseEvents& mouse,
     child->handle_messages(mouse, keyboard);
     child->x = saved_x;
     child->y = saved_y;
+  }
+
+  if (mouse.wheel_delta != 0.f && !mouse.wheel_consumed) {
+    const bool can_y = m.show_y && m.content_h > m.viewport_h;
+    const bool can_x = m.show_x && m.content_w > m.viewport_w;
+    if (can_y) {
+      scroll_offset_y_ -= mouse.wheel_delta * 40.f;
+      mouse.wheel_consumed = true;
+    } else if (can_x) {
+      scroll_offset_x_ -= mouse.wheel_delta * 40.f;
+      mouse.wheel_consumed = true;
+    }
+    ClampScroll(m);
   }
 }
 

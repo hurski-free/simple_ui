@@ -474,6 +474,7 @@ public:
   void update(float dt) override;
   void collect_draw(std::vector<DrawCommand*>& out,
                     bool force_rebuild = false) override;
+  void collect_overlay_draw(std::vector<DrawCommand*>& out) override;
   void handle_events() override;
   void get_layout_size(float& out_w, float& out_h) const override;
 
@@ -509,6 +510,7 @@ public:
   void update(float dt) override;
   void collect_draw(std::vector<DrawCommand*>& out,
                     bool force_rebuild = false) override;
+  void collect_overlay_draw(std::vector<DrawCommand*>& out) override;
   void handle_events() override;
   void get_layout_size(float& out_w, float& out_h) const override;
   bool captures_input() const override;

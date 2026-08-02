@@ -393,9 +393,10 @@ void TextArea::handle_messages(const MouseEvents& mouse,
     state = ComponentState::Base;
   }
 
-  if (focused && mouse.wheel_delta != 0.f) {
+  if (focused && mouse.wheel_delta != 0.f && !mouse.wheel_consumed) {
     scroll_offset_ -= mouse.wheel_delta * RowHeight();
     ClampScroll();
+    mouse.wheel_consumed = true;
   }
 
   if (!focused) {

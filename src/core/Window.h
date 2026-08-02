@@ -19,8 +19,19 @@ public:
   bool SetScreenMode(ScreenMode mode);
   ScreenMode GetScreenMode() const;
 
+  // Preferred client size for Windowed (and stored for returning to Windowed).
+  // When already Windowed, resizes the window and swap-chain immediately.
+  bool SetScreenSize(int width, int height);
+  int GetWindowedWidth() const;
+  int GetWindowedHeight() const;
+
   bool SetMsaaSamples(int samples);
   int GetMsaaSamples() const;
+
+  // Post-present brightness multiplier applied when blitting the offscreen
+  // scene to the swap-chain backbuffer. 1.0 = unchanged. Clamped to >= 0.
+  void SetBrightness(float brightness);
+  float GetBrightness() const;
 
   HWND GetHwnd() const;
   ID3D11Device* GetDevice() const;
@@ -70,14 +81,21 @@ private:
   // Swap-chain back buffer (final present target).
   ID3D11RenderTargetView* backbuffer_rtv_ = nullptr;
 
-  // Offscreen scene color (may be MSAA). Future post-effects sample resolve_srv_.
+  // Offscreen scene color (may be MSAA). UI always renders here.
   ID3D11Texture2D* scene_tex_ = nullptr;
   ID3D11RenderTargetView* scene_rtv_ = nullptr;
-  ID3D11Texture2D* resolve_tex_ = nullptr;  // non-MSAA when msaa > 1
+  // Non-MSAA path: sample the scene texture directly after unbinding as RT.
+  ID3D11ShaderResourceView* scene_srv_ = nullptr;
+  // MSAA path: resolve into this texture, then sample for the blit.
+  ID3D11Texture2D* resolve_tex_ = nullptr;
   ID3D11ShaderResourceView* resolve_srv_ = nullptr;
 
   Shader blit_shader_;
+  ID3D11Buffer* blit_cb_ = nullptr;
   ID3D11SamplerState* blit_sampler_ = nullptr;
   ID3D11BlendState* blit_blend_ = nullptr;
   ID3D11RasterizerState* blit_raster_ = nullptr;
+
+  // Linear RGB multiplier for the final blit (1.0 = identity).
+  float brightness_ = 1.f;
 };

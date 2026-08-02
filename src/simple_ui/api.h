@@ -40,10 +40,21 @@ SIMPLE_UI_API ScreenMode ui_get_screen_mode(const UiContext* ctx);
 // Switches display mode at runtime (recreates swap-chain buffers as needed).
 SIMPLE_UI_API bool ui_set_screen_mode(UiContext* ctx, ScreenMode mode);
 
-// MSAA sample count for the offscreen scene texture (1 disables). Values are
-// snapped to 1/2/4/8 and clamped to what the GPU supports. Recreates targets.
+// Preferred client size for Windowed mode (also stored when leaving Windowed so
+// returning to Windowed restores this size). When already Windowed, resizes the
+// window and swap-chain immediately.
+SIMPLE_UI_API bool ui_set_screen_size(UiContext* ctx, int width, int height);
+
+// MSAA sample count for the offscreen scene texture (1 disables MSAA; the
+// scene is still rendered offscreen and blitted). Values are snapped to
+// 1/2/4/8 and clamped to what the GPU supports. Recreates targets.
 SIMPLE_UI_API bool ui_set_msaa_samples(UiContext* ctx, int samples);
 SIMPLE_UI_API int ui_get_msaa_samples(const UiContext* ctx);
+
+// Final blit brightness multiplier (1.0 = unchanged). Clamped to >= 0.
+// Applied when copying the offscreen scene to the swap-chain backbuffer.
+SIMPLE_UI_API void ui_set_brightness(UiContext* ctx, float brightness);
+SIMPLE_UI_API float ui_get_brightness(const UiContext* ctx);
 
 // Valid until the next ui_process_messages call.
 SIMPLE_UI_API const MouseEvents* ui_get_mouse_events(const UiContext* ctx);

@@ -127,6 +127,13 @@ bool ui_set_screen_mode(UiContext* ctx, ScreenMode mode) {
   return ctx->window.SetScreenMode(mode);
 }
 
+bool ui_set_screen_size(UiContext* ctx, int width, int height) {
+  if (!ctx) {
+    return false;
+  }
+  return ctx->window.SetScreenSize(width, height);
+}
+
 bool ui_set_msaa_samples(UiContext* ctx, int samples) {
   if (!ctx) {
     return false;
@@ -136,6 +143,17 @@ bool ui_set_msaa_samples(UiContext* ctx, int samples) {
 
 int ui_get_msaa_samples(const UiContext* ctx) {
   return ctx ? ctx->window.GetMsaaSamples() : 1;
+}
+
+void ui_set_brightness(UiContext* ctx, float brightness) {
+  if (!ctx) {
+    return;
+  }
+  ctx->window.SetBrightness(brightness);
+}
+
+float ui_get_brightness(const UiContext* ctx) {
+  return ctx ? ctx->window.GetBrightness() : 1.f;
 }
 
 const MouseEvents* ui_get_mouse_events(const UiContext* ctx) {

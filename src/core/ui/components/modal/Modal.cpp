@@ -186,6 +186,17 @@ void Modal::collect_draw(std::vector<DrawCommand*>& out, bool force_rebuild) {
   }
 }
 
+void Modal::collect_overlay_draw(std::vector<DrawCommand*>& out) {
+  if (!open) {
+    return;
+  }
+  for (Component* child : components) {
+    if (child) {
+      child->collect_overlay_draw(out);
+    }
+  }
+}
+
 void Modal::on_nudge_draw_origin(float dx, float dy, int dlayer) {
   for (Component* child : components) {
     if (child) {

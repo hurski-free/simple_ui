@@ -25,7 +25,9 @@ public:
   // Forwards dt to each component's update.
   void update(float dt);
 
-  // Collects DrawCommands in layer order and submits them to the renderer.
+  // Collects DrawCommands and submits them to the renderer.
+  // Popups from collect_overlay_draw are rendered in a second pass on top of
+  // the entire main scene (independent of component layers).
   void draw(UiContext* ctx);
 
   // Invokes queued component event handlers (call after draw).

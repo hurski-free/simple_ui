@@ -59,6 +59,10 @@ struct MouseEvents {
   bool right_released = false;
   bool middle_released = false;
   float wheel_delta = 0.f;      // wheel notches this frame (can accumulate)
+  // Set by a handler so parents / lower siblings ignore this frame's wheel.
+  // Cleared each frame with wheel_delta. Mutable so const MouseEvents& handlers
+  // can mark consumption without changing the handle_messages signature.
+  mutable bool wheel_consumed = false;
 };
 
 // Per-frame keyboard snapshot. Indexed by virtual-key codes (0..255).

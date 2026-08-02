@@ -28,13 +28,20 @@ constexpr const char* kBlitPS = R"(
 Texture2D scene_tex : register(t0);
 SamplerState scene_samp : register(s0);
 
+cbuffer BlitParams : register(b0) {
+  float brightness;
+  float3 _pad;
+};
+
 struct PSIn {
   float4 pos : SV_POSITION;
   float2 uv : TEXCOORD0;
 };
 
 float4 main(PSIn input) : SV_TARGET {
-  return scene_tex.Sample(scene_samp, input.uv);
+  float4 c = scene_tex.Sample(scene_samp, input.uv);
+  c.rgb *= brightness;
+  return c;
 }
 )";
 }  // namespace
@@ -98,8 +105,8 @@ int Window::NormalizeMsaaSamples(int samples) {
 bool Window::IsValid() const {
   return hwnd_ != nullptr && device_ != nullptr && context_ != nullptr &&
          swapChain_ != nullptr && backbuffer_rtv_ != nullptr &&
-         scene_rtv_ != nullptr &&
-         (msaa_samples_ <= 1 || resolve_srv_ != nullptr);
+         scene_rtv_ != nullptr && scene_tex_ != nullptr &&
+         (resolve_srv_ != nullptr || scene_srv_ != nullptr);
 }
 
 bool Window::ProcessMessages() {
@@ -130,18 +137,16 @@ void Window::Present() {
     return;
   }
 
-  if (msaa_samples_ > 1 && scene_tex_ && resolve_srv_) {
-    // Unbind scene as RT before resolve/sample.
-    ID3D11RenderTargetView* null_rtv = nullptr;
-    context_->OMSetRenderTargets(1, &null_rtv, nullptr);
+  // Unbind the offscreen scene before resolve/sample.
+  ID3D11RenderTargetView* null_rtv = nullptr;
+  context_->OMSetRenderTargets(1, &null_rtv, nullptr);
 
-    if (resolve_tex_) {
-      context_->ResolveSubresource(resolve_tex_, 0, scene_tex_, 0,
-                                   DXGI_FORMAT_R8G8B8A8_UNORM);
-    }
-    BlitSceneToBackbuffer();
+  if (msaa_samples_ > 1 && scene_tex_ && resolve_tex_) {
+    context_->ResolveSubresource(resolve_tex_, 0, scene_tex_, 0,
+                                 DXGI_FORMAT_R8G8B8A8_UNORM);
   }
-  // MSAA=1: scene_rtv_ aliases the swap-chain backbuffer — no blit.
+
+  BlitSceneToBackbuffer();
 
   swapChain_->Present(1, 0);
   BindSceneTarget();
@@ -151,8 +156,44 @@ ScreenMode Window::GetScreenMode() const {
   return screenMode_;
 }
 
+int Window::GetWindowedWidth() const {
+  return windowed_width_;
+}
+
+int Window::GetWindowedHeight() const {
+  return windowed_height_;
+}
+
+bool Window::SetScreenSize(int width, int height) {
+  if (!IsValid() || width <= 0 || height <= 0) {
+    return false;
+  }
+
+  windowed_width_ = width;
+  windowed_height_ = height;
+
+  if (screenMode_ != ScreenMode::Windowed) {
+    return true;
+  }
+
+  RECT rect = {0, 0, width, height};
+  AdjustWindowRect(&rect, kWindowedStyle, FALSE);
+  SetWindowPos(hwnd_, nullptr, 0, 0, rect.right - rect.left,
+               rect.bottom - rect.top,
+               SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+  return ResizeSwapChain(static_cast<UINT>(width), static_cast<UINT>(height));
+}
+
 int Window::GetMsaaSamples() const {
   return msaa_samples_;
+}
+
+void Window::SetBrightness(float brightness) {
+  brightness_ = brightness < 0.f ? 0.f : brightness;
+}
+
+float Window::GetBrightness() const {
+  return brightness_;
 }
 
 bool Window::SetMsaaSamples(int samples) {
@@ -294,6 +335,7 @@ void Window::BeginFrameInput() {
   mouse_.right_released = false;
   mouse_.middle_released = false;
   mouse_.wheel_delta = 0.f;
+  mouse_.wheel_consumed = false;
 
   for (int i = 0; i < KeyboardEvents::kKeyCount; ++i) {
     keyboard_.pressed[i] = false;
@@ -543,8 +585,11 @@ void Window::ReleaseSceneTargets() {
     resolve_tex_->Release();
     resolve_tex_ = nullptr;
   }
+  if (scene_srv_) {
+    scene_srv_->Release();
+    scene_srv_ = nullptr;
+  }
   if (scene_rtv_) {
-    // When MSAA=1, scene_rtv_ may alias backbuffer_rtv_ (extra AddRef).
     scene_rtv_->Release();
     scene_rtv_ = nullptr;
   }
@@ -582,16 +627,7 @@ bool Window::CreateSceneTargets() {
   }
   msaa_samples_ = static_cast<int>(sample_count);
 
-  // MSAA off: render directly to the swap-chain backbuffer (skip resolve/blit).
-  if (sample_count == 1) {
-    if (!backbuffer_rtv_) {
-      return false;
-    }
-    scene_rtv_ = backbuffer_rtv_;
-    scene_rtv_->AddRef();
-    return true;
-  }
-
+  // Always render UI into an offscreen color target (OpenGL-FBO style).
   D3D11_TEXTURE2D_DESC td{};
   td.Width = static_cast<UINT>(width_);
   td.Height = static_cast<UINT>(height_);
@@ -602,6 +638,9 @@ bool Window::CreateSceneTargets() {
   td.SampleDesc.Quality = quality;
   td.Usage = D3D11_USAGE_DEFAULT;
   td.BindFlags = D3D11_BIND_RENDER_TARGET;
+  if (sample_count == 1) {
+    td.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+  }
 
   HRESULT hr = device_->CreateTexture2D(&td, nullptr, &scene_tex_);
   if (FAILED(hr)) {
@@ -614,10 +653,19 @@ bool Window::CreateSceneTargets() {
     return false;
   }
 
+  if (sample_count == 1) {
+    hr = device_->CreateShaderResourceView(scene_tex_, nullptr, &scene_srv_);
+    if (FAILED(hr)) {
+      ReleaseSceneTargets();
+      return false;
+    }
+    return true;
+  }
+
   D3D11_TEXTURE2D_DESC rd = td;
   rd.SampleDesc.Count = 1;
   rd.SampleDesc.Quality = 0;
-  rd.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+  rd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
   hr = device_->CreateTexture2D(&rd, nullptr, &resolve_tex_);
   if (FAILED(hr)) {
     ReleaseSceneTargets();
@@ -641,6 +689,16 @@ bool Window::InitBlitResources() {
     return false;
   }
 
+  D3D11_BUFFER_DESC cbd{};
+  cbd.ByteWidth = 16;  // float4
+  cbd.Usage = D3D11_USAGE_DYNAMIC;
+  cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+  cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  HRESULT hr = device_->CreateBuffer(&cbd, nullptr, &blit_cb_);
+  if (FAILED(hr)) {
+    return false;
+  }
+
   D3D11_SAMPLER_DESC samp{};
   samp.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
   samp.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -648,7 +706,7 @@ bool Window::InitBlitResources() {
   samp.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
   samp.ComparisonFunc = D3D11_COMPARISON_NEVER;
   samp.MaxLOD = D3D11_FLOAT32_MAX;
-  HRESULT hr = device_->CreateSamplerState(&samp, &blit_sampler_);
+  hr = device_->CreateSamplerState(&samp, &blit_sampler_);
   if (FAILED(hr)) {
     return false;
   }
@@ -671,6 +729,10 @@ bool Window::InitBlitResources() {
 }
 
 void Window::ReleaseBlitResources() {
+  if (blit_cb_) {
+    blit_cb_->Release();
+    blit_cb_ = nullptr;
+  }
   if (blit_sampler_) {
     blit_sampler_->Release();
     blit_sampler_ = nullptr;
@@ -700,7 +762,9 @@ void Window::BindSceneTarget() {
 }
 
 void Window::BlitSceneToBackbuffer() {
-  if (!context_ || !backbuffer_rtv_ || !resolve_srv_) {
+  ID3D11ShaderResourceView* src_srv =
+      resolve_srv_ ? resolve_srv_ : scene_srv_;
+  if (!context_ || !backbuffer_rtv_ || !src_srv || !blit_cb_) {
     return;
   }
 
@@ -719,14 +783,26 @@ void Window::BlitSceneToBackbuffer() {
   const float blend_factor[4] = {0, 0, 0, 0};
   context_->OMSetBlendState(blit_blend_, blend_factor, 0xffffffff);
 
+  D3D11_MAPPED_SUBRESOURCE mapped{};
+  if (SUCCEEDED(context_->Map(blit_cb_, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                              &mapped))) {
+    float* data = static_cast<float*>(mapped.pData);
+    data[0] = brightness_;
+    data[1] = 0.f;
+    data[2] = 0.f;
+    data[3] = 0.f;
+    context_->Unmap(blit_cb_, 0);
+  }
+
   blit_shader_.bind(context_);
+  context_->PSSetConstantBuffers(0, 1, &blit_cb_);
   context_->IASetInputLayout(nullptr);
   context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   UINT stride = 0;
   UINT offset = 0;
   ID3D11Buffer* null_vb = nullptr;
   context_->IASetVertexBuffers(0, 1, &null_vb, &stride, &offset);
-  context_->PSSetShaderResources(0, 1, &resolve_srv_);
+  context_->PSSetShaderResources(0, 1, &src_srv);
   context_->PSSetSamplers(0, 1, &blit_sampler_);
   context_->Draw(3, 0);
 

@@ -170,6 +170,14 @@ void Panel::collect_draw(std::vector<DrawCommand*>& out, bool force_rebuild) {
   }
 }
 
+void Panel::collect_overlay_draw(std::vector<DrawCommand*>& out) {
+  for (Component* child : components) {
+    if (child) {
+      child->collect_overlay_draw(out);
+    }
+  }
+}
+
 void Panel::on_nudge_draw_origin(float dx, float dy, int dlayer) {
   for (Component* child : components) {
     if (child) {

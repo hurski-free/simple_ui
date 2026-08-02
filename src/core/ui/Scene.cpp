@@ -53,15 +53,31 @@ void Scene::handle_messages(UiContext* ctx) {
     }
   }
 
-  for (Component* component : components) {
+  // Topmost first (high layer, then reverse within layer) so overlapping
+  // containers can consume the wheel before ones underneath.
+  auto dispatch = [&](Component* component) {
     if (!component) {
-      continue;
+      return;
     }
     component->ui = ctx;
     if (has_capture && !component->captures_input()) {
-      continue;
+      return;
     }
     component->handle_messages(mouse, keyboard);
+  };
+
+  if (components_sorted && !layers.empty()) {
+    for (auto layer_it = layers.rbegin(); layer_it != layers.rend();
+         ++layer_it) {
+      const std::vector<Component*>& comps = layer_it->components;
+      for (auto it = comps.rbegin(); it != comps.rend(); ++it) {
+        dispatch(*it);
+      }
+    }
+  } else {
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+      dispatch(*it);
+    }
   }
 }
 
@@ -98,12 +114,26 @@ void Scene::draw(UiContext* ctx) {
     }
   };
 
+  // Pass 1: main UI. Overlays are collected separately so popups (e.g. Select
+  // dropdown) always composite on top regardless of component layer order.
   if (components_sorted && !layers.empty()) {
     for (const SceneLayer& bucket : layers) {
       for (Component* component : bucket.components) {
         append_component(component, frame_commands_);
       }
     }
+  } else {
+    for (Component* component : components) {
+      append_component(component, frame_commands_);
+    }
+  }
+
+  ctx->renderer.draw(ctx->window.GetContext(), ctx->window.GetWidth(),
+                     ctx->window.GetHeight(), frame_commands_,
+                     components_sorted);
+
+  frame_commands_.clear();
+  if (components_sorted && !layers.empty()) {
     for (const SceneLayer& bucket : layers) {
       for (Component* component : bucket.components) {
         append_overlay(component, frame_commands_);
@@ -111,16 +141,15 @@ void Scene::draw(UiContext* ctx) {
     }
   } else {
     for (Component* component : components) {
-      append_component(component, frame_commands_);
-    }
-    for (Component* component : components) {
       append_overlay(component, frame_commands_);
     }
   }
 
-  ctx->renderer.draw(ctx->window.GetContext(), ctx->window.GetWidth(),
-                     ctx->window.GetHeight(), frame_commands_,
-                     components_sorted);
+  if (!frame_commands_.empty()) {
+    // Preserve emit order; do not re-sort by layer (would defeat "always on top").
+    ctx->renderer.draw(ctx->window.GetContext(), ctx->window.GetWidth(),
+                       ctx->window.GetHeight(), frame_commands_, true);
+  }
 }
 
 void Scene::handle_events() {

@@ -1,8 +1,37 @@
 #include <windows.h>
 
+#include <algorithm>
+#include <string>
+
 #include "simple_ui.h"
 
 namespace {
+
+struct ResolutionOption {
+  int width = 0;
+  int height = 0;
+  const wchar_t* label = nullptr;
+};
+
+const ResolutionOption kResolutions[] = {
+    {1280, 720, L"1280 x 720"},
+    {1600, 900, L"1600 x 900"},
+    {1920, 1080, L"1920 x 1080"},
+    {2560, 1440, L"2560 x 1440"},
+    {3840, 2160, L"3840 x 2160"},
+};
+
+const ScreenMode kScreenModes[] = {
+    ScreenMode::Windowed,
+    ScreenMode::Borderless,
+    ScreenMode::Fullscreen,
+};
+
+struct AppSettings {
+  int resolution_index = 0;
+  int screen_mode_index = 0;
+  float brightness = 100.f;
+};
 
 void StyleMenuButton(Button& button) {
   button.width = 220.f;
@@ -24,6 +53,37 @@ void StyleMenuButton(Button& button) {
   button.font_size = 32.f;
 }
 
+int FindResolutionIndex(int width, int height) {
+  const int count =
+      static_cast<int>(sizeof(kResolutions) / sizeof(kResolutions[0]));
+  for (int i = 0; i < count; ++i) {
+    if (kResolutions[i].width == width && kResolutions[i].height == height) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+int FindScreenModeIndex(ScreenMode mode) {
+  const int count =
+      static_cast<int>(sizeof(kScreenModes) / sizeof(kScreenModes[0]));
+  for (int i = 0; i < count; ++i) {
+    if (kScreenModes[i] == mode) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+bool SettingsValid(const AppSettings& s) {
+  const int res_count =
+      static_cast<int>(sizeof(kResolutions) / sizeof(kResolutions[0]));
+  const int mode_count =
+      static_cast<int>(sizeof(kScreenModes) / sizeof(kScreenModes[0]));
+  return s.resolution_index >= 0 && s.resolution_index < res_count &&
+         s.screen_mode_index >= 0 && s.screen_mode_index < mode_count;
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -39,62 +99,30 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     return 1;
   }
 
-  const float screen_w = static_cast<float>(ui_get_width(ctx));
-  const float screen_h = static_cast<float>(ui_get_height(ctx));
-
   Scene main_menu;
-  Scene authors;
   Scene settings;
   Scene* active_scene = &main_menu;
 
-  // Bound data for widgets.
-  std::wstring player_name = L"Player";
-  int resolution_index = 1;
-  float volume = 50.f;
-  bool vsync_enabled = true;
-  int quality_index = 1;
+  AppSettings applied;
+  applied.resolution_index =
+      FindResolutionIndex(ui_get_width(ctx), ui_get_height(ctx));
+  applied.screen_mode_index = FindScreenModeIndex(ui_get_screen_mode(ctx));
+  applied.brightness = 100.f;
+
+  // Draft is a working copy of applied; widgets edit only the draft.
+  AppSettings draft = applied;
+  ui_set_brightness(ctx, applied.brightness / 100.f);
 
   // --- Main menu ---
-  Button btn_start;
   Button btn_settings;
-  Button btn_authors;
   Button btn_exit;
-  Input name_input;
   Label fps_label;
 
-  StyleMenuButton(btn_start);
   StyleMenuButton(btn_settings);
-  StyleMenuButton(btn_authors);
   StyleMenuButton(btn_exit);
 
-  btn_start.text = L"Start";
   btn_settings.text = L"Settings";
-  btn_authors.text = L"Authors";
   btn_exit.text = L"Exit";
-
-  name_input.width = 220.f;
-  name_input.height = 36.f;
-  name_input.placeholder = L"Player name";
-  name_input.bind_data(&player_name);
-
-  const float menu_gap = 14.f;
-  const float menu_total_h =
-      btn_start.height * 4.f + menu_gap * 4.f + name_input.height;
-  float menu_y = (screen_h - menu_total_h) * 0.5f;
-  const float menu_x = (screen_w - btn_start.width) * 0.5f;
-
-  auto place_menu_button = [&](Button& b) {
-    b.x = menu_x;
-    b.y = menu_y;
-    menu_y += b.height + menu_gap;
-  };
-  place_menu_button(btn_start);
-  place_menu_button(btn_settings);
-  place_menu_button(btn_authors);
-  place_menu_button(btn_exit);
-
-  name_input.x = menu_x;
-  name_input.y = menu_y;
 
   fps_label.text = L"FPS: --";
   fps_label.width = 140.f;
@@ -104,246 +132,178 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   fps_label.color = {0.95f, 0.97f, 1.f, 1.f};
   fps_label.font_size = 18.f;
 
-  btn_start.on_click = []() {};
-  btn_settings.on_click = [&]() { active_scene = &settings; };
-  btn_authors.on_click = [&]() { active_scene = &authors; };
   btn_exit.on_click = [ctx]() { PostQuitMessage(0); };
 
-  main_menu.components = {&btn_start, &btn_settings, &btn_authors, &btn_exit,
-                          &name_input, &fps_label};
+  main_menu.components = {&btn_settings, &btn_exit, &fps_label};
   main_menu.prepare_scene();
 
-  // --- Authors ---
-  Container authors_box;
-  authors_box.width = 420.f;
-  authors_box.height = 360.f;
-  authors_box.x = (screen_w - authors_box.width) * 0.5f;
-  authors_box.y = (screen_h - authors_box.height) * 0.5f - 20.f;
-  authors_box.style_base.background_color = {0.08f, 0.1f, 0.16f, 0.95f};
-  authors_box.style_base.border = {2.f, BorderMode::Out, {0.7f, 0.8f, 1.f, 1.f}};
-  authors_box.style_hovered = authors_box.style_base;
-  authors_box.style_active = authors_box.style_base;
-  authors_box.scroll_y.mode = ScrollMode::Auto;
-  authors_box.place_mode = ScrollPlaceMode::In;
-
-  Text authors_list;
-  authors_list.x = 16.f;
-  authors_list.y = 16.f;
-  authors_list.width = authors_box.width - 44.f;
-  authors_list.color = {0.92f, 0.94f, 1.f, 1.f};
-  authors_list.text =
-      L"Elena Morozova\n"
-      L"Viktor Hale\n"
-      L"Mira Solenne\n"
-      L"Jonah Crowe\n"
-      L"Aisha Renard\n"
-      L"Theo Blackwood\n"
-      L"Nadia Voss\n"
-      L"Kai Nakamura\n"
-      L"Liora Quinn\n"
-      L"Sebastian Drake\n"
-      L"Freya Lindholm\n"
-      L"Omar Castillo\n"
-      L"Ivy Marchand\n"
-      L"Roman Petrov\n"
-      L"Celeste Byrne\n"
-      L"Darius Okonkwo\n"
-      L"Sable Winters\n"
-      L"Henrik Valen\n"
-      L"Yuna Park\n"
-      L"Cassian Rowe";
-  authors_list.height = 0.f;
-  {
-    int lines = 1;
-    for (wchar_t ch : authors_list.text) {
-      if (ch == L'\n') {
-        ++lines;
-      }
-    }
-    authors_list.height = static_cast<float>(lines) * 28.f + 16.f;
-  }
-
-  authors_box.components.push_back(&authors_list);
-
-  Button btn_back_authors;
-  StyleMenuButton(btn_back_authors);
-  btn_back_authors.width = 160.f;
-  btn_back_authors.height = 40.f;
-  btn_back_authors.text = L"Back";
-  btn_back_authors.x = (screen_w - btn_back_authors.width) * 0.5f;
-  btn_back_authors.y = authors_box.y + authors_box.height + 24.f;
-  btn_back_authors.on_click = [&]() { active_scene = &main_menu; };
-
-  authors.components = {&authors_box, &btn_back_authors};
-  authors.prepare_scene();
-
-  // --- Settings ---
+  // --- Settings (bound to draft) ---
   Text settings_title;
   settings_title.text = L"Settings";
   settings_title.width = 300.f;
-  settings_title.height = 36.f;
+  settings_title.height = 40.f;
   settings_title.color = {1.f, 1.f, 1.f, 1.f};
-  settings_title.x = (screen_w - 300.f) * 0.5f;
-  settings_title.y = 48.f;
+  settings_title.font_size = 32.f;
 
-  ScrollView settings_box;
-  settings_box.width = 600.f;
-  settings_box.height = 420.f;
-  settings_box.x = (screen_w - settings_box.width) * 0.5f;
-  settings_box.y = settings_title.y + 48.f;
-  settings_box.style_base.background_color = {0.08f, 0.1f, 0.16f, 0.95f};
-  settings_box.style_base.border = {2.f, BorderMode::Out, {0.7f, 0.8f, 1.f, 1.f}};
-  settings_box.style_hovered = settings_box.style_base;
-  settings_box.style_active = settings_box.style_base;
-  settings_box.place_mode = ScrollPlaceMode::In;
-
-  const float content_x = 24.f;
-  float cy = 20.f;
+  Label resolution_label;
+  resolution_label.text = L"Resolution";
+  resolution_label.width = 220.f;
+  resolution_label.height = 28.f;
+  resolution_label.color = {0.9f, 0.93f, 1.f, 1.f};
+  resolution_label.font_size = 20.f;
 
   Select resolution;
-  resolution.width = 350.f;
-  resolution.height = 50.f;
-  resolution.dropdown_height = 120.f;
-  resolution.options = {L"1280 x 720", L"1600 x 900", L"1920 x 1080",
-                        L"2560 x 1440", L"3840 x 2160"};
-  resolution.bind_data(&resolution_index);
-  resolution.x = content_x;
-  resolution.y = cy;
-  resolution.layer = 1;
-  resolution.font_size = 24.f;
-  cy += resolution.height + 24.f;
+  resolution.width = 280.f;
+  resolution.height = 40.f;
+  resolution.dropdown_height = 160.f;
+  resolution.font_size = 20.f;
+  for (const ResolutionOption& opt : kResolutions) {
+    resolution.options.push_back(opt.label);
+  }
+  resolution.bind_data(&draft.resolution_index);
 
-  Range volume_slider;
-  volume_slider.width = 150.f;
-  volume_slider.min_value = 0.f;
-  volume_slider.max_value = 100.f;
-  volume_slider.step = 5.f;
-  volume_slider.text = L"Volume";
-  volume_slider.label_width = 70.f;
-  volume_slider.show_value = true;
-  volume_slider.tick_labels = {{0.f, L"Min"}, {100.f, L"Max"}};
-  volume_slider.bind_data(&volume);
-  volume_slider.x = content_x;
-  volume_slider.y = cy;
+  Label screen_mode_label;
+  screen_mode_label.text = L"ScreenMode";
+  screen_mode_label.width = 220.f;
+  screen_mode_label.height = 28.f;
+  screen_mode_label.color = {0.9f, 0.93f, 1.f, 1.f};
+  screen_mode_label.font_size = 20.f;
 
-  float volume_w = 0.f;
-  float volume_h = 0.f;
-  volume_slider.get_layout_size(volume_w, volume_h);
-  cy += volume_h + 20.f;
+  Select screen_mode;
+  screen_mode.width = 280.f;
+  screen_mode.height = 40.f;
+  screen_mode.dropdown_height = 100.f;
+  screen_mode.font_size = 20.f;
+  screen_mode.options = {L"Windowed", L"Borderless", L"Fullscreen"};
+  screen_mode.bind_data(&draft.screen_mode_index);
 
-  Checkbox vsync;
-  vsync.label = L"Enable VSync";
-  vsync.bind_data(&vsync_enabled);
-  vsync.x = content_x;
-  vsync.y = cy;
-  cy += 36.f;
+  Label brightness_label;
+  brightness_label.text = L"Brightness";
+  brightness_label.width = 220.f;
+  brightness_label.height = 28.f;
+  brightness_label.color = {0.9f, 0.93f, 1.f, 1.f};
+  brightness_label.font_size = 20.f;
 
-  Checkbox accept_terms;
-  bool terms_ok = false;
-  accept_terms.label = L"Accept terms";
-  accept_terms.check_kind = CheckMarkKind::Checkmark;
-  accept_terms.bind_data(&terms_ok);
-  accept_terms.x = content_x;
-  accept_terms.y = cy;
-  cy += 36.f;
+  Range brightness_slider;
+  brightness_slider.width = 180.f;
+  brightness_slider.min_value = 50.f;
+  brightness_slider.max_value = 100.f;
+  brightness_slider.step = 1.f;
+  brightness_slider.text.clear();
+  brightness_slider.show_value = true;
+  brightness_slider.tick_labels = {{50.f, L"50"}, {100.f, L"100"}};
+  brightness_slider.bind_data(&draft.brightness);
 
-  Toggle mute_toggle;
-  bool muted = false;
-  mute_toggle.label = L"Mute audio";
-  mute_toggle.transition_duration = 0.25f;
-  mute_toggle.bind_data(&muted);
-  mute_toggle.x = content_x;
-  mute_toggle.y = cy;
-  cy += 40.f;
+  Button btn_back;
+  Button btn_apply;
+  StyleMenuButton(btn_back);
+  StyleMenuButton(btn_apply);
+  btn_back.width = 140.f;
+  btn_back.height = 40.f;
+  btn_back.font_size = 24.f;
+  btn_back.text = L"Back";
+  btn_apply.width = 140.f;
+  btn_apply.height = 40.f;
+  btn_apply.font_size = 24.f;
+  btn_apply.text = L"Apply";
 
-  ProgressBar load_bar;
-  float load_progress = 0.65f;
-  load_bar.width = 280.f;
-  load_bar.show_percent = true;
-  load_bar.bind_data(&load_progress);
-  load_bar.x = content_x;
-  load_bar.y = cy;
-  cy += 40.f;
+  auto sync_widgets_from_draft = [&]() {
+    resolution.selected = draft.resolution_index;
+    screen_mode.selected = draft.screen_mode_index;
+    brightness_slider.value = draft.brightness;
+  };
 
-  Label notes_label;
-  notes_label.text = L"Notes";
-  notes_label.width = 120.f;
-  notes_label.x = content_x;
-  notes_label.y = cy;
-  cy += 28.f;
+  auto open_settings = [&]() {
+    draft = applied;
+    sync_widgets_from_draft();
+    active_scene = &settings;
+  };
 
-  TextArea notes;
-  std::wstring notes_data = L"Settings notes...";
-  notes.width = 280.f;
-  notes.height = 90.f;
-  notes.bind_data(&notes_data);
-  notes.x = content_x;
-  notes.y = cy;
-  notes.font_size = 24.f;
-  cy += notes.height + 20.f;
+  btn_settings.on_click = open_settings;
 
-  RadioGroup quality;
-  quality.options = {L"Low", L"Medium", L"High"};
-  quality.orientation = RadioOrientation::Horizontal;
-  quality.item_width = 90.f;
-  quality.bind_data(&quality_index);
-  quality.x = content_x;
-  quality.y = cy;
-  cy += 56.f;
+  btn_back.on_click = [&]() {
+    // Discard draft; restore applied brightness (only setting with live preview).
+    ui_set_brightness(ctx, applied.brightness / 100.f);
+    active_scene = &main_menu;
+  };
 
-  settings_box.components = {&resolution,   &volume_slider, &vsync,
-                             &accept_terms, &mute_toggle,   &load_bar,
-                             &notes_label,  &notes,         &quality};
+  auto layout_ui = [&]() {
+    const float screen_w = static_cast<float>(ui_get_width(ctx));
+    const float screen_h = static_cast<float>(ui_get_height(ctx));
 
-  Button btn_back_settings;
-  StyleMenuButton(btn_back_settings);
-  btn_back_settings.width = 140.f;
-  btn_back_settings.height = 40.f;
-  btn_back_settings.text = L"Back";
-  btn_back_settings.y = settings_box.y + settings_box.height + 20.f;
-  btn_back_settings.on_click = [&]() { active_scene = &main_menu; };
+    const float menu_gap = 14.f;
+    const float menu_total_h = btn_settings.height * 2.f + menu_gap;
+    float menu_y = (screen_h - menu_total_h) * 0.5f;
+    const float menu_x = (screen_w - btn_settings.width) * 0.5f;
 
-  // Demo modal
-  Modal about_modal;
-  about_modal.screen_width = screen_w;
-  about_modal.screen_height = screen_h;
-  about_modal.title = L"About";
-  about_modal.width = 360.f;
-  about_modal.height = 180.f;
-  Label about_text;
-  about_text.text = L"Simple UI demo settings";
-  about_text.width = 320.f;
-  about_text.height = 40.f;
-  about_text.x = 20.f;
-  about_text.y = 20.f;
-  Button about_ok;
-  StyleMenuButton(about_ok);
-  about_ok.text = L"OK";
-  about_ok.width = 100.f;
-  about_ok.height = 36.f;
-  about_ok.x = 130.f;
-  about_ok.y = 90.f;
-  about_ok.on_click = [&]() { about_modal.open = false; };
-  about_modal.components = {&about_text, &about_ok};
+    btn_settings.x = menu_x;
+    btn_settings.y = menu_y;
+    menu_y += btn_settings.height + menu_gap;
+    btn_exit.x = menu_x;
+    btn_exit.y = menu_y;
 
-  Button btn_about;
-  StyleMenuButton(btn_about);
-  btn_about.width = 140.f;
-  btn_about.height = 40.f;
-  btn_about.text = L"About";
-  btn_about.y = btn_back_settings.y;
-  btn_about.on_click = [&]() { about_modal.open = true; };
+    settings_title.x = (screen_w - settings_title.width) * 0.5f;
+    settings_title.y = screen_h * 0.12f;
 
-  const float footer_gap = 16.f;
-  const float footer_total =
-      btn_back_settings.width + footer_gap + btn_about.width;
-  const float footer_x = (screen_w - footer_total) * 0.5f;
-  btn_back_settings.x = footer_x;
-  btn_about.x = footer_x + btn_back_settings.width + footer_gap;
+    const float field_x = (screen_w - resolution.width) * 0.5f;
+    float cy = settings_title.y + 56.f;
 
-  settings.components = {&settings_title, &settings_box, &btn_back_settings,
-                         &btn_about, &about_modal};
+    resolution_label.x = field_x;
+    resolution_label.y = cy;
+    cy += resolution_label.height + 8.f;
+    resolution.x = field_x;
+    resolution.y = cy;
+    cy += resolution.height + 24.f;
+
+    screen_mode_label.x = field_x;
+    screen_mode_label.y = cy;
+    cy += screen_mode_label.height + 8.f;
+    screen_mode.x = field_x;
+    screen_mode.y = cy;
+    cy += screen_mode.height + 24.f;
+
+    brightness_label.x = field_x;
+    brightness_label.y = cy;
+    cy += brightness_label.height + 8.f;
+    brightness_slider.x = field_x;
+    brightness_slider.y = cy;
+
+    float bright_w = 0.f;
+    float bright_h = 0.f;
+    brightness_slider.get_layout_size(bright_w, bright_h);
+    cy += bright_h + 36.f;
+
+    const float footer_gap = 16.f;
+    const float footer_total = btn_back.width + footer_gap + btn_apply.width;
+    const float footer_x = (screen_w - footer_total) * 0.5f;
+    btn_back.x = footer_x;
+    btn_back.y = cy;
+    btn_apply.x = footer_x + btn_back.width + footer_gap;
+    btn_apply.y = cy;
+  };
+
+  btn_apply.on_click = [&]() {
+    draft.brightness = std::clamp(draft.brightness, 50.f, 100.f);
+    if (!SettingsValid(draft)) {
+      return;
+    }
+
+    applied = draft;
+
+    const ResolutionOption& res = kResolutions[applied.resolution_index];
+    const ScreenMode mode = kScreenModes[applied.screen_mode_index];
+    ui_set_brightness(ctx, applied.brightness / 100.f);
+    ui_set_screen_size(ctx, res.width, res.height);
+    ui_set_screen_mode(ctx, mode);
+    layout_ui();
+  };
+
+  settings.components = {&settings_title,   &resolution_label, &resolution,
+                         &screen_mode_label, &screen_mode,     &brightness_label,
+                         &brightness_slider, &btn_back,        &btn_apply};
   settings.prepare_scene();
+
+  layout_ui();
 
   LARGE_INTEGER frequency{};
   LARGE_INTEGER last_time{};
@@ -369,6 +329,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       fps_label.text = L"FPS: " + std::to_wstring(fps);
       fps_accum_time = 0.f;
       fps_accum_frames = 0;
+    }
+
+    // Live preview only for brightness, and only while Settings is open.
+    if (active_scene == &settings) {
+      draft.brightness = std::clamp(draft.brightness, 50.f, 100.f);
+      ui_set_brightness(ctx, draft.brightness / 100.f);
+    } else {
+      ui_set_brightness(ctx, applied.brightness / 100.f);
     }
 
     active_scene->handle_messages(ctx);
