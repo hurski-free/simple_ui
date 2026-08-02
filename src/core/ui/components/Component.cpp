@@ -180,7 +180,8 @@ void Component::emit_draw_buffer(std::vector<DrawCommand*>& out) {
   for (DrawCommand& cmd : draw_command_buffer_) {
     if (cmd.type == DrawCommandType::Rect ||
         cmd.type == DrawCommandType::Circle ||
-        cmd.type == DrawCommandType::RoundedRect) {
+        cmd.type == DrawCommandType::RoundedRect ||
+        cmd.type == DrawCommandType::Triangle) {
       if (cmd.width <= 0.f || cmd.height <= 0.f || cmd.color.a <= 0.f) {
         continue;
       }

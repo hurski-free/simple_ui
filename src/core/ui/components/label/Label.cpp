@@ -5,6 +5,7 @@ Label::Label() {
   width = p.width;
   height = p.height;
   color = p.color;
+  outline = p.outline;
   text_align = p.text_align;
   style_base = p.style_base;
   style_hovered = p.style_hovered;
@@ -31,6 +32,7 @@ void Label::build_draw_buffer() {
   cmd.width = width;
   cmd.height = height;
   cmd.color = color;
+  cmd.outline = outline;
   cmd.layer = layer;
   cmd.text = text;
   cmd.wrap = false;

@@ -5,6 +5,7 @@ Text::Text() {
   width = p.width;
   height = p.height;
   color = p.color;
+  outline = p.outline;
   style_base = p.style_base;
   style_hovered = p.style_hovered;
   style_active = p.style_active;
@@ -27,6 +28,7 @@ void Text::build_draw_buffer() {
     cmd.width = 0.f;
     cmd.height = 0.f;
     cmd.color = color;
+    cmd.outline = outline;
     cmd.layer = layer;
     cmd.text.clear();
     cmd.wrap = true;
@@ -41,6 +43,7 @@ void Text::build_draw_buffer() {
   cmd.width = width;
   cmd.height = 0.f;
   cmd.color = color;
+  cmd.outline = outline;
   cmd.layer = layer;
   cmd.text = text;
   cmd.wrap = true;

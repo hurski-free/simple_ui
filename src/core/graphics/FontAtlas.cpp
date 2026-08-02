@@ -82,19 +82,34 @@ bool FontAtlas::BuildInternal(const std::vector<unsigned char>& ttf_data,
     return false;
   }
 
-  int atlas_size = ChooseAtlasSize(static_cast<int>(codepoint_count), size_px);
-
-  std::vector<stbtt_packedchar> packed(codepoint_count);
-  std::vector<int> codepoints_i(codepoint_count);
+  // Only pack codepoints that exist in this face. stbtt_PackFontRanges with
+  // skip_missing returns 0 whenever any requested glyph is absent, which would
+  // reject Latin-only fonts when the default set includes Cyrillic.
+  std::vector<char32_t> present;
+  present.reserve(codepoint_count);
   for (size_t i = 0; i < codepoint_count; ++i) {
-    codepoints_i[i] = static_cast<int>(codepoints[i]);
+    if (stbtt_FindGlyphIndex(&font, static_cast<int>(codepoints[i])) != 0) {
+      present.push_back(codepoints[i]);
+    }
+  }
+  if (present.empty()) {
+    return false;
+  }
+
+  const size_t present_count = present.size();
+  int atlas_size = ChooseAtlasSize(static_cast<int>(present_count), size_px);
+
+  std::vector<stbtt_packedchar> packed(present_count);
+  std::vector<int> codepoints_i(present_count);
+  for (size_t i = 0; i < present_count; ++i) {
+    codepoints_i[i] = static_cast<int>(present[i]);
   }
 
   std::vector<stbtt_pack_range> ranges(1);
   ranges[0].font_size = size_px;
   ranges[0].first_unicode_codepoint_in_range = 0;
   ranges[0].array_of_unicode_codepoints = codepoints_i.data();
-  ranges[0].num_chars = static_cast<int>(codepoint_count);
+  ranges[0].num_chars = static_cast<int>(present_count);
   ranges[0].chardata_for_range = packed.data();
   ranges[0].h_oversample = 1;
   ranges[0].v_oversample = 1;
@@ -135,7 +150,7 @@ bool FontAtlas::BuildInternal(const std::vector<unsigned char>& ttf_data,
   stbtt_GetFontVMetrics(&font, &ascent, &descent, &line_gap);
 
   glyphs_storage_.clear();
-  glyphs_storage_.reserve(codepoint_count);
+  glyphs_storage_.reserve(present_count);
   glyphs_extra_.clear();
   bmp_index_.assign(0x10000, -1);
 
@@ -149,7 +164,7 @@ bool FontAtlas::BuildInternal(const std::vector<unsigned char>& ttf_data,
     }
   };
 
-  for (size_t i = 0; i < codepoint_count; ++i) {
+  for (size_t i = 0; i < present_count; ++i) {
     const stbtt_packedchar& pc = packed[i];
     // Skip missing / unpacked glyphs
     if (pc.x1 <= pc.x0 && pc.y1 <= pc.y0 && pc.xadvance == 0.f) {
@@ -166,7 +181,7 @@ bool FontAtlas::BuildInternal(const std::vector<unsigned char>& ttf_data,
     glyph.offset_x = pc.xoff;
     glyph.offset_y = pc.yoff;
     glyph.advance_x = pc.xadvance;
-    store_glyph(codepoints[i], glyph);
+    store_glyph(present[i], glyph);
   }
 
   // Ensure space glyph exists for advance-only spacing

@@ -234,18 +234,20 @@ void Select::build_draw_buffer() {
   }
   apply_font(label);
 
+  constexpr float kArrowW = 9.f;
+  constexpr float kArrowH = 5.f;
   DrawCommand& arrow = draw_command_buffer_[6];
-  arrow.type = DrawCommandType::Text;
-  arrow.x = x + width - 22.f;
-  arrow.y = y;
-  arrow.width = 16.f;
-  arrow.height = height;
+  arrow.type = DrawCommandType::Triangle;
+  arrow.x = x + width - 10.f - kArrowW;
+  arrow.y = y + (height - kArrowH) * 0.5f;
+  arrow.width = kArrowW;
+  arrow.height = kArrowH;
   arrow.color = text_color;
   arrow.layer = layer;
-  arrow.text = open_ ? L"^" : L"v";
+  arrow.text.clear();
   arrow.wrap = false;
-  arrow.text_align = TextAlign::Center;
-  apply_font(arrow);
+  // corner_radius > 0 flips the triangle tip upward (open state).
+  arrow.corner_radius = open_ ? 1.f : 0.f;
 
   const size_t n = options.size();
   const size_t base = 7;
@@ -411,7 +413,8 @@ void Select::collect_draw(std::vector<DrawCommand*>& out, bool force_rebuild) {
     DrawCommand& cmd = draw_command_buffer_[i];
     if (cmd.type == DrawCommandType::Rect ||
         cmd.type == DrawCommandType::Circle ||
-        cmd.type == DrawCommandType::RoundedRect) {
+        cmd.type == DrawCommandType::RoundedRect ||
+        cmd.type == DrawCommandType::Triangle) {
       if (cmd.width <= 0.f || cmd.height <= 0.f || cmd.color.a <= 0.f) {
         continue;
       }

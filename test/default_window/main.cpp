@@ -206,8 +206,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 
   // --- Text ---
   Label title_text;
-  Text d_text_default, d_text_wrap;
-  Text text_default, text_wrap;
+  Text d_text_default, d_text_wrap, d_text_outline;
+  Text text_default, text_wrap, text_outline;
 
   layout.AddTitle(title_text, L"Text");
   text_default.text = L"Single-line sample";
@@ -222,12 +222,18 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       EstimateWrappedHeight(ctx, text_wrap.text, text_wrap.width,
                             text_wrap.font_size);
   layout.AddRow(d_text_wrap, text_wrap, L"wrap within width");
+
+  text_outline.text = L"Outlined text sample";
+  text_outline.width = 280.f;
+  text_outline.color = {1.f, 0.95f, 0.45f, 1.f};
+  text_outline.outline = {2.f, {1.f, 1.f, 1.f, 1.f}};
+  layout.AddRow(d_text_outline, text_outline, L"outline thickness + color");
   layout.EndSection();
 
   // --- Label ---
   Label title_label;
-  Text d_label_default, d_label_center, d_label_left_top;
-  Label label_default, label_center, label_left_top;
+  Text d_label_default, d_label_center, d_label_left_top, d_label_outline;
+  Label label_default, label_center, label_left_top, label_outline;
 
   layout.AddTitle(title_label, L"Label");
   label_default.text = L"LeftMiddle";
@@ -255,6 +261,17 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   label_left_top.style_hovered = label_left_top.style_base;
   label_left_top.style_active = label_left_top.style_base;
   layout.AddRow(d_label_left_top, label_left_top, L"TextAlign::LeftTop");
+
+  label_outline.text = L"Outline";
+  label_outline.width = 220.f;
+  label_outline.height = 28.f;
+  label_outline.text_align = TextAlign::Center;
+  label_outline.color = {1.f, 1.f, 1.f, 1.f};
+  label_outline.outline = {2.f, {0.85f, 0.25f, 0.2f, 1.f}};
+  label_outline.style_base.background_color = {0.18f, 0.2f, 0.28f, 1.f};
+  label_outline.style_hovered = label_outline.style_base;
+  label_outline.style_active = label_outline.style_base;
+  layout.AddRow(d_label_outline, label_outline, L"outline thickness + color");
   layout.EndSection();
 
   // --- Input ---

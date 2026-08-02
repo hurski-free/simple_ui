@@ -1050,6 +1050,32 @@ void Renderer::AppendSolidRect(const DrawCommand& cmd) {
   solid_batch_[base + 5] = {x0, y1, c.r, c.g, c.b, c.a};
 }
 
+void Renderer::AppendSolidTriangle(const DrawCommand& cmd) {
+  if (cmd.width <= 0.f || cmd.height <= 0.f || cmd.color.a <= 0.f) {
+    return;
+  }
+
+  const float x0 = cmd.x;
+  const float y0 = cmd.y;
+  const float x1 = cmd.x + cmd.width;
+  const float y1 = cmd.y + cmd.height;
+  const float xm = cmd.x + cmd.width * 0.5f;
+  const Color& c = cmd.color;
+  const bool tip_up = cmd.corner_radius > 0.f;
+
+  const size_t base = solid_batch_.size();
+  solid_batch_.resize(base + 3);
+  if (tip_up) {
+    solid_batch_[base + 0] = {xm, y0, c.r, c.g, c.b, c.a};
+    solid_batch_[base + 1] = {x1, y1, c.r, c.g, c.b, c.a};
+    solid_batch_[base + 2] = {x0, y1, c.r, c.g, c.b, c.a};
+  } else {
+    solid_batch_[base + 0] = {x0, y0, c.r, c.g, c.b, c.a};
+    solid_batch_[base + 1] = {x1, y0, c.r, c.g, c.b, c.a};
+    solid_batch_[base + 2] = {xm, y1, c.r, c.g, c.b, c.a};
+  }
+}
+
 void Renderer::AppendSdfShape(const DrawCommand& cmd) {
   if (cmd.width <= 0.f || cmd.height <= 0.f || cmd.color.a <= 0.f) {
     return;
@@ -1212,99 +1238,127 @@ void Renderer::EmitTextCommand(ID3D11DeviceContext* context,
   active_font_atlas_ = atlas;
   text_batch_atlas_ = atlas;
 
-  const Color& c = cmd.color;
   const float scale = FontScaleForCommand(cmd);
   const float line_height = atlas->line_height() * scale;
   const float text_height = (atlas->ascent() - atlas->descent()) * scale;
   const float ascent = atlas->ascent() * scale;
 
-  auto baseline_for_block = [&](float block_height) {
-    if (cmd.text_align == TextAlign::LeftMiddle ||
-        cmd.text_align == TextAlign::Center) {
-      return cmd.y + (cmd.height - block_height) * 0.5f + ascent;
-    }
-    return cmd.y + ascent;
-  };
-
-  auto emit_plain_lines = [&](bool honor_width_wrap) {
-    std::vector<std::wstring> lines;
-    std::wstring line;
-    float line_width = 0.f;
-    size_t i = 0;
-    char32_t cp = 0;
-
-    auto push_line = [&]() {
-      lines.push_back(line);
-      line.clear();
-      line_width = 0.f;
+  auto emit_pass = [&](float origin_x, float origin_y, const Color& color) {
+    auto baseline_for_block = [&](float block_height) {
+      if (cmd.text_align == TextAlign::LeftMiddle ||
+          cmd.text_align == TextAlign::Center) {
+        return origin_y + (cmd.height - block_height) * 0.5f + ascent;
+      }
+      return origin_y + ascent;
     };
 
-    while (NextCodepoint(cmd.text, i, cp)) {
-      if (cp == U'\n') {
-        push_line();
-        continue;
-      }
-      const float advance = GlyphAdvance(cp) * scale;
-      if (honor_width_wrap && !line.empty() &&
-          line_width + advance > cmd.width && cmd.width > 0.f) {
-        const bool is_space = (cp == U' ' || cp == U'\t');
-        if (is_space) {
+    auto emit_plain_lines = [&](bool honor_width_wrap) {
+      std::vector<std::wstring> lines;
+      std::wstring line;
+      float line_width = 0.f;
+      size_t i = 0;
+      char32_t cp = 0;
+
+      auto push_line = [&]() {
+        lines.push_back(line);
+        line.clear();
+        line_width = 0.f;
+      };
+
+      while (NextCodepoint(cmd.text, i, cp)) {
+        if (cp == U'\n') {
           push_line();
           continue;
         }
+        const float advance = GlyphAdvance(cp) * scale;
+        if (honor_width_wrap && !line.empty() &&
+            line_width + advance > cmd.width && cmd.width > 0.f) {
+          const bool is_space = (cp == U' ' || cp == U'\t');
+          if (is_space) {
+            push_line();
+            continue;
+          }
+          push_line();
+        }
+        if (cp <= 0xFFFF) {
+          line.push_back(static_cast<wchar_t>(cp));
+        } else {
+          const char32_t payload = cp - 0x10000;
+          line.push_back(static_cast<wchar_t>(0xD800 + (payload >> 10)));
+          line.push_back(static_cast<wchar_t>(0xDC00 + (payload & 0x3FF)));
+        }
+        line_width += advance;
+        if (honor_width_wrap && line.size() == 1 && advance > cmd.width &&
+            cmd.width > 0.f) {
+          push_line();
+        }
+      }
+      if (!line.empty() || lines.empty()) {
         push_line();
       }
-      if (cp <= 0xFFFF) {
-        line.push_back(static_cast<wchar_t>(cp));
-      } else {
-        const char32_t payload = cp - 0x10000;
-        line.push_back(static_cast<wchar_t>(0xD800 + (payload >> 10)));
-        line.push_back(static_cast<wchar_t>(0xDC00 + (payload & 0x3FF)));
-      }
-      line_width += advance;
-      if (honor_width_wrap && line.size() == 1 && advance > cmd.width &&
-          cmd.width > 0.f) {
-        push_line();
-      }
-    }
-    if (!line.empty() || lines.empty()) {
-      push_line();
-    }
 
-    const float block_h =
-        lines.empty()
-            ? text_height
-            : text_height +
-                  line_height * static_cast<float>(lines.size() - 1);
-    float baseline = baseline_for_block(block_h);
+      const float block_h =
+          lines.empty()
+              ? text_height
+              : text_height +
+                    line_height * static_cast<float>(lines.size() - 1);
+      float baseline = baseline_for_block(block_h);
 
-    for (const std::wstring& ln : lines) {
-      float pen_x = cmd.x;
-      if (cmd.text_align == TextAlign::Center) {
-        const float w = atlas->measure_width(ln) * scale;
-        pen_x = cmd.x + (cmd.width - w) * 0.5f;
+      for (const std::wstring& ln : lines) {
+        float pen_x = origin_x;
+        if (cmd.text_align == TextAlign::Center) {
+          const float w = atlas->measure_width(ln) * scale;
+          pen_x = origin_x + (cmd.width - w) * 0.5f;
+        }
+        EmitTextLine(ln, pen_x, baseline, color, scale);
+        baseline += line_height;
       }
-      EmitTextLine(ln, pen_x, baseline, c, scale);
-      baseline += line_height;
-    }
-  };
+    };
 
-  if (!cmd.wrap) {
-    if (cmd.text.find(L'\n') == std::wstring::npos) {
-      const float text_width = atlas->measure_width(cmd.text) * scale;
-      float pen_x = cmd.x;
-      if (cmd.text_align == TextAlign::Center) {
-        pen_x = cmd.x + (cmd.width - text_width) * 0.5f;
+    if (!cmd.wrap) {
+      if (cmd.text.find(L'\n') == std::wstring::npos) {
+        const float text_width = atlas->measure_width(cmd.text) * scale;
+        float pen_x = origin_x;
+        if (cmd.text_align == TextAlign::Center) {
+          pen_x = origin_x + (cmd.width - text_width) * 0.5f;
+        }
+        const float baseline = baseline_for_block(text_height);
+        EmitTextLine(cmd.text, pen_x, baseline, color, scale);
+        return;
       }
-      const float baseline = baseline_for_block(text_height);
-      EmitTextLine(cmd.text, pen_x, baseline, c, scale);
+      emit_plain_lines(false);
       return;
     }
-    emit_plain_lines(false);
-    return;
+
+    emit_plain_lines(true);
+  };
+
+  if (cmd.outline.thickness > 0.f && cmd.outline.color.a > 0.f) {
+    // 8-direction offset silhouette; multiple rings for thicker outlines.
+    static constexpr float kDirs[8][2] = {
+        {-1.f, 0.f}, {1.f, 0.f},  {0.f, -1.f}, {0.f, 1.f},
+        {-1.f, -1.f}, {1.f, -1.f}, {-1.f, 1.f}, {1.f, 1.f},
+    };
+    constexpr float kInvDiag = 0.70710678f;
+    const float thickness = cmd.outline.thickness;
+    const int rings =
+        std::max(1, static_cast<int>(std::ceil(thickness)));
+    for (int ring = 1; ring <= rings; ++ring) {
+      const float dist =
+          thickness * static_cast<float>(ring) / static_cast<float>(rings);
+      for (const float (&dir)[2] : kDirs) {
+        float nx = dir[0];
+        float ny = dir[1];
+        if (nx != 0.f && ny != 0.f) {
+          nx *= kInvDiag;
+          ny *= kInvDiag;
+        }
+        emit_pass(cmd.x + nx * dist, cmd.y + ny * dist, cmd.outline.color);
+      }
+    }
   }
 
-  emit_plain_lines(true);
+  emit_pass(cmd.x, cmd.y, cmd.color);
 }
 
 void Renderer::GroupCommandsForBatching(std::vector<DrawCommand*>& commands) {
@@ -1361,6 +1415,7 @@ void Renderer::GroupCommandsForBatching(std::vector<DrawCommand*>& commands) {
     }
     switch (cmd->type) {
       case DrawCommandType::Rect:
+      case DrawCommandType::Triangle:
         rects.push_back(cmd);
         break;
       case DrawCommandType::Circle:
@@ -1521,6 +1576,14 @@ void Renderer::draw(ID3D11DeviceContext* context, int screen_width,
         FlushShapeBatch(context);
       }
       AppendSolidRect(cmd);
+    } else if (cmd.type == DrawCommandType::Triangle) {
+      if (!text_batch_.empty()) {
+        FlushTextBatch(context);
+      }
+      if (!shape_batch_.empty()) {
+        FlushShapeBatch(context);
+      }
+      AppendSolidTriangle(cmd);
     } else if (cmd.type == DrawCommandType::Circle ||
                cmd.type == DrawCommandType::RoundedRect) {
       if (!text_batch_.empty()) {

@@ -84,6 +84,7 @@ private:
   void FlushAllBatches(ID3D11DeviceContext* context);
 
   void AppendSolidRect(const DrawCommand& cmd);
+  void AppendSolidTriangle(const DrawCommand& cmd);
   void AppendSdfShape(const DrawCommand& cmd);
   void DrawImageCommand(ID3D11DeviceContext* context, const DrawCommand& cmd);
   void AppendGlyphQuad(float x0, float y0, float x1, float y1, float u0,
