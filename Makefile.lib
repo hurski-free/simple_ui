@@ -1,0 +1,107 @@
+# Incremental + parallel Release build for simple_ui.
+# Invoked by build_lib.bat via: mingw32-make -f Makefile.lib -jN
+
+CXX      ?= g++
+SRC_DIR  := src
+OBJ_DIR  := build/obj
+LIB_DIR  := build/lib
+PCH_DIR  := build/pch
+
+# Release: optimize for speed, strip symbols, GC unused sections.
+CXXFLAGS := -DWINDOW_EXPORTS -DNDEBUG -O2 -ffunction-sections -fdata-sections \
+	-MMD -MP -I$(SRC_DIR)
+LDFLAGS  := -shared -s -Wl,--gc-sections
+LDLIBS   := -ld3d11 -ldxgi -ld3dcompiler -lgdi32 -luser32 -lole32 -lwindowscodecs
+IMPLIB   := -Wl,--out-implib,$(LIB_DIR)/simple_ui.lib
+
+PCH_HDR  := $(SRC_DIR)/pch.h
+PCH_COPY := $(PCH_DIR)/pch.h
+PCH_GCH  := $(PCH_DIR)/pch.h.gch
+FLAGS_STAMP := $(OBJ_DIR)/.cxxflags
+
+SRCS := \
+	$(SRC_DIR)/entry.cpp \
+	$(SRC_DIR)/main.cpp \
+	$(SRC_DIR)/core/Window.cpp \
+	$(SRC_DIR)/core/ui/Scene.cpp \
+	$(SRC_DIR)/core/ui/StylePresets.cpp \
+	$(SRC_DIR)/core/ui/components/Component.cpp \
+	$(SRC_DIR)/core/ui/components/button/Button.cpp \
+	$(SRC_DIR)/core/ui/components/text/Text.cpp \
+	$(SRC_DIR)/core/ui/components/container/Container.cpp \
+	$(SRC_DIR)/core/ui/components/checkbox/Checkbox.cpp \
+	$(SRC_DIR)/core/ui/components/range/Range.cpp \
+	$(SRC_DIR)/core/ui/components/radiogroup/RadioGroup.cpp \
+	$(SRC_DIR)/core/ui/components/input/Input.cpp \
+	$(SRC_DIR)/core/ui/components/select/Select.cpp \
+	$(SRC_DIR)/core/ui/components/label/Label.cpp \
+	$(SRC_DIR)/core/ui/components/image/Image.cpp \
+	$(SRC_DIR)/core/ui/components/progressbar/ProgressBar.cpp \
+	$(SRC_DIR)/core/ui/components/toggle/Toggle.cpp \
+	$(SRC_DIR)/core/ui/components/textarea/TextArea.cpp \
+	$(SRC_DIR)/core/ui/components/panel/Panel.cpp \
+	$(SRC_DIR)/core/ui/components/modal/Modal.cpp \
+	$(SRC_DIR)/core/ui/components/scrollview/ScrollView.cpp \
+	$(SRC_DIR)/core/graphics/Shader.cpp \
+	$(SRC_DIR)/core/graphics/Renderer.cpp \
+	$(SRC_DIR)/core/graphics/FontAtlas.cpp
+
+OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+DEPS := $(OBJS:.o=.d)
+
+DLL := $(LIB_DIR)/simple_ui.dll
+HDR := $(LIB_DIR)/simple_ui.h
+HDR_DIR := $(LIB_DIR)/simple_ui
+
+# cmd.exe helpers (mingw32-make SHELL may be sh without coreutils on PATH)
+to_win = $(subst /,\,$(1))
+mk_dir = cmd /C "if not exist $(call to_win,$(1)) mkdir $(call to_win,$(1))"
+cp_file = cmd /C "copy /Y $(call to_win,$(1)) $(call to_win,$(2)) >nul"
+cp_tree = cmd /C "xcopy /E /I /Y $(call to_win,$(1)) $(call to_win,$(2)) >nul"
+
+.PHONY: all clean
+
+all: $(DLL) $(HDR)
+
+$(FLAGS_STAMP): FORCE
+	@$(call mk_dir,$(OBJ_DIR))
+	@echo $(CXXFLAGS) $(LDFLAGS)> $(FLAGS_STAMP).tmp
+	@cmd /C "fc /b $(call to_win,$(FLAGS_STAMP).tmp) $(call to_win,$(FLAGS_STAMP)) >nul 2>&1 || copy /Y $(call to_win,$(FLAGS_STAMP).tmp) $(call to_win,$(FLAGS_STAMP)) >nul"
+	@cmd /C "del /Q $(call to_win,$(FLAGS_STAMP).tmp) >nul 2>&1"
+
+FORCE:
+
+$(HDR): $(SRC_DIR)/simple_ui.h $(wildcard $(SRC_DIR)/simple_ui/*.h)
+	@$(call mk_dir,$(LIB_DIR))
+	@$(call cp_file,$(SRC_DIR)/simple_ui.h,$(HDR))
+	@$(call cp_tree,$(SRC_DIR)/simple_ui,$(HDR_DIR))
+	@echo Built $(HDR)
+	@echo Built $(HDR_DIR)\*.h
+
+$(DLL): $(OBJS)
+	@$(call mk_dir,$(LIB_DIR))
+	@echo Linking $@...
+	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS) $(IMPLIB)
+	@echo Built $@
+	@echo Built $(LIB_DIR)/simple_ui.lib
+
+$(PCH_GCH): $(PCH_HDR) $(FLAGS_STAMP)
+	@$(call mk_dir,$(PCH_DIR))
+	@echo Building precompiled header...
+	@$(call cp_file,$(PCH_HDR),$(PCH_COPY))
+	$(CXX) -x c++-header $(PCH_HDR) $(CXXFLAGS) -o $(PCH_GCH)
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(PCH_GCH) $(FLAGS_STAMP)
+	@$(call mk_dir,$(dir $@))
+	@echo Compiling $<...
+	$(CXX) $(CXXFLAGS) -include $(PCH_COPY) -c $< -o $@
+
+clean:
+	-cmd /C "if exist $(call to_win,$(OBJ_DIR)) rmdir /S /Q $(call to_win,$(OBJ_DIR))"
+	-cmd /C "if exist $(call to_win,$(PCH_DIR)) rmdir /S /Q $(call to_win,$(PCH_DIR))"
+	-cmd /C "if exist $(call to_win,$(DLL)) del /Q $(call to_win,$(DLL))"
+	-cmd /C "if exist $(call to_win,$(LIB_DIR)/simple_ui.lib) del /Q $(call to_win,$(LIB_DIR)/simple_ui.lib)"
+	-cmd /C "if exist $(call to_win,$(HDR)) del /Q $(call to_win,$(HDR))"
+	-cmd /C "if exist $(call to_win,$(HDR_DIR)) rmdir /S /Q $(call to_win,$(HDR_DIR))"
+
+-include $(DEPS)

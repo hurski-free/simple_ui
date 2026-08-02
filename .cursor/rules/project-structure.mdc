@@ -1,0 +1,30 @@
+---
+description: Структура проекта DLL-библиотеки и тестовых программ
+alwaysApply: true
+---
+
+# Структура проекта
+
+## Библиотека
+
+- Исходный код DLL хранится в папке `src/`
+- Публичный API — `src/simple_ui.h`
+- Сборка библиотеки: `build_lib.bat`
+- Артефакты сборки библиотеки: `build/lib/` (`simple_ui.dll`, `simple_ui.lib`, `simple_ui.h`)
+
+## Тесты
+
+- Исходники тестовых программ — в `test/` (каждый тест в своей подпапке, например `test/simple_window/`)
+- Сборка теста идёт в `build/tests/%test_name%/`
+- При сборке теста DLL копируется из `build/lib/` в `build/tests/%test_name%/`
+- Тесты подключают публичный заголовок: `#include "simple_ui.h"` из `build/lib/`
+
+## Пример
+
+```
+src/                    → исходники DLL
+src/simple_ui.h         → публичный API
+build_lib.bat           → сборка → build/lib/ (dll, lib, simple_ui.h)
+test/simple_window/     → исходники теста
+test/simple_window/build.bat → сборка → build/tests/simple_window/ (+ копия DLL)
+```

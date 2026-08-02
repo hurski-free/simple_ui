@@ -1,0 +1,38 @@
+---
+description: Публичный API библиотеки описывается только в simple_ui.h
+alwaysApply: true
+---
+
+# Публичный API
+
+Всё, что доступно снаружи DLL, описывается в `src/simple_ui.h`:
+
+- функции API
+- непрозрачный контекст (`UiContext`)
+- публичные классы (`Button`, `Text`, `Scene`, …)
+- типы данных и структуры (`Color`, `Border`, `ComponentStyle`, `StyleTransition`, …)
+
+## Правила
+
+- Потребители библиотеки подключают только `simple_ui.h` (из `build/lib/` после сборки)
+- Публичные классы объявляются в `simple_ui.h`; реализация — в `src/` (`.h` / `.cpp`)
+- Система координат UI: `(0, 0)` — верхний левый угол, X вправо, Y вниз
+- Цвета везде через структуру `Color` (rgba)
+- Внешний вид по состояниям — `style_base` / `style_hovered` / `style_active` / `style_disabled`
+- Плавные переходы — `StyleTransition` (длительности по свойствам независимо)
+- `BorderMode::None` — рамки нет (по умолчанию)
+- Компоненты описывают вид через `DrawCommand` (`collect_draw`), без DirectX
+- Отрисовка GPU — внутренний `Renderer` (`src/core/graphics/`)
+- Внутренние классы вроде `Window`, `Shader`, `Renderer` не экспортируются
+- Не экспортируйте новые публичные сущности через другие заголовки
+- При добавлении или изменении внешнего интерфейса обновляйте `simple_ui.h`
+
+```
+// ✅ GOOD
+button.style_hovered.background_color = {1.f, 0.4f, 0.4f, 1.f};
+button.transition.background_duration = 1.f;
+button.transition.border_duration = 0.5f;
+
+// ❌ BAD — менять цвет вручную в handle_messages
+background_color = {1.f, 0.f, 0.f, 1.f};
+```
