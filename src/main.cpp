@@ -89,6 +89,13 @@ void ui_clear(UiContext* ctx, const Color& color) {
   ctx->window.Clear(color);
 }
 
+void ui_bind_scene_target(UiContext* ctx) {
+  if (!ctx) {
+    return;
+  }
+  ctx->window.BindSceneTarget();
+}
+
 void ui_present(UiContext* ctx) {
   if (!ctx) {
     return;

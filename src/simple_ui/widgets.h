@@ -334,6 +334,66 @@ protected:
   void build_draw_buffer() override;
 };
 
+// Offscreen color + depth target for custom D3D11 drawing outside the library.
+// Typical frame:
+//   ui_clear(ctx, ...);
+//   canvas.begin_draw(ctx);          // bind RTV+DSV, optional clear
+//   /* your DrawIndexed / etc. */
+//   canvas.end_draw(ctx);            // restore scene target
+//   scene.draw(ctx);
+//   ui_present(ctx);
+// The color buffer is shown as an Image quad using DrawCommand (UI pass).
+class SIMPLE_UI_API Canvas : public Component {
+public:
+  Canvas();
+  ~Canvas() override;
+
+  void get_layout_size(float& out_w, float& out_h) const override;
+  void collect_draw(std::vector<DrawCommand*>& out,
+                    bool force_rebuild = false) override;
+
+  // Create or recreate GPU targets to match width/height (pixel size = ceil).
+  bool ensure_targets(UiContext* ctx);
+  void release_targets();
+
+  // Bind color RTV + depth DSV for external drawing. Clears if requested.
+  bool begin_draw(UiContext* ctx, bool clear = true);
+  // Unbind canvas targets and restore the window scene color target.
+  void end_draw(UiContext* ctx);
+
+  ID3D11RenderTargetView* color_rtv() const { return color_rtv_; }
+  ID3D11DepthStencilView* depth_dsv() const { return depth_dsv_; }
+  ID3D11ShaderResourceView* color_srv() const { return color_srv_; }
+  ID3D11Texture2D* color_texture() const { return color_tex_; }
+  ID3D11Texture2D* depth_texture() const { return depth_tex_; }
+  int texture_id() const { return texture_id_; }
+  int texture_width() const { return tex_w_; }
+  int texture_height() const { return tex_h_; }
+
+  float width = 0.f;
+  float height = 0.f;
+  Color tint{};
+  Color clear_color{};
+  float clear_depth = 1.f;
+
+protected:
+  void build_draw_buffer() override;
+
+private:
+  int PixelWidth() const;
+  int PixelHeight() const;
+
+  ID3D11Texture2D* color_tex_ = nullptr;
+  ID3D11RenderTargetView* color_rtv_ = nullptr;
+  ID3D11ShaderResourceView* color_srv_ = nullptr;
+  ID3D11Texture2D* depth_tex_ = nullptr;
+  ID3D11DepthStencilView* depth_dsv_ = nullptr;
+  int texture_id_ = -1;
+  int tex_w_ = 0;
+  int tex_h_ = 0;
+  bool drawing_ = false;
+};
+
 // Horizontal progress bar. bind_data links a float in [min_value, max_value].
 class SIMPLE_UI_API ProgressBar : public Component {
 public:

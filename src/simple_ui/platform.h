@@ -22,3 +22,23 @@ typedef struct ID3D11Device ID3D11Device;
 #define __ID3D11DeviceContext_FWD_DEFINED__
 typedef struct ID3D11DeviceContext ID3D11DeviceContext;
 #endif
+
+#ifndef __ID3D11Texture2D_FWD_DEFINED__
+#define __ID3D11Texture2D_FWD_DEFINED__
+typedef struct ID3D11Texture2D ID3D11Texture2D;
+#endif
+
+#ifndef __ID3D11RenderTargetView_FWD_DEFINED__
+#define __ID3D11RenderTargetView_FWD_DEFINED__
+typedef struct ID3D11RenderTargetView ID3D11RenderTargetView;
+#endif
+
+#ifndef __ID3D11DepthStencilView_FWD_DEFINED__
+#define __ID3D11DepthStencilView_FWD_DEFINED__
+typedef struct ID3D11DepthStencilView ID3D11DepthStencilView;
+#endif
+
+#ifndef __ID3D11ShaderResourceView_FWD_DEFINED__
+#define __ID3D11ShaderResourceView_FWD_DEFINED__
+typedef struct ID3D11ShaderResourceView ID3D11ShaderResourceView;
+#endif

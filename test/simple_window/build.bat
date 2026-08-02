@@ -17,7 +17,7 @@ g++ -o "%OUT%\simple_window.exe" ^
   "%~dp0main.cpp" ^
   -I "%LIB%" ^
   -L "%LIB%" -lsimple_ui ^
-  -ld3d11 -ldxgi -lgdi32 -luser32 ^
+  -ld3d11 -ldxgi -ld3dcompiler -lgdi32 -luser32 ^
   -mwindows -municode
 
 if errorlevel 1 (

@@ -22,6 +22,7 @@ alwaysApply: true
 - Плавные переходы — `StyleTransition` (длительности по свойствам независимо)
 - `BorderMode::None` — рамки нет (по умолчанию)
 - Компоненты описывают вид через `DrawCommand` (`collect_draw`), без DirectX
+- Исключение: `Canvas` отдаёт D3D11 RTV/DSV для внешней отрисовки; в UI показывается как `DrawCommand::Image`
 - Отрисовка GPU — внутренний `Renderer` (`src/core/graphics/`)
 - Внутренние классы вроде `Window`, `Shader`, `Renderer` не экспортируются
 - Не экспортируйте новые публичные сущности через другие заголовки

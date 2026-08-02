@@ -30,6 +30,9 @@ SIMPLE_UI_API bool ui_process_messages(UiContext* ctx);
 SIMPLE_UI_API void ui_clear(UiContext* ctx, const Color& color);
 SIMPLE_UI_API void ui_present(UiContext* ctx);
 
+// Re-bind the offscreen scene color target (e.g. after Canvas::end_draw).
+SIMPLE_UI_API void ui_bind_scene_target(UiContext* ctx);
+
 SIMPLE_UI_API HWND ui_get_hwnd(const UiContext* ctx);
 SIMPLE_UI_API ID3D11Device* ui_get_device(const UiContext* ctx);
 SIMPLE_UI_API ID3D11DeviceContext* ui_get_device_context(const UiContext* ctx);

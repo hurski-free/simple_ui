@@ -36,6 +36,7 @@ SRCS := \
 	$(SRC_DIR)/core/ui/components/select/Select.cpp \
 	$(SRC_DIR)/core/ui/components/label/Label.cpp \
 	$(SRC_DIR)/core/ui/components/image/Image.cpp \
+	$(SRC_DIR)/core/ui/components/canvas/Canvas.cpp \
 	$(SRC_DIR)/core/ui/components/progressbar/ProgressBar.cpp \
 	$(SRC_DIR)/core/ui/components/toggle/Toggle.cpp \
 	$(SRC_DIR)/core/ui/components/textarea/TextArea.cpp \

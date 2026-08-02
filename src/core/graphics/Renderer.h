@@ -26,6 +26,9 @@ public:
 
   int load_texture_file(const wchar_t* path);
   int create_texture_rgba(int width, int height, const unsigned char* rgba);
+  // Register an existing texture for UI sampling (AddRef; released on unload).
+  int register_texture(ID3D11Texture2D* texture, ID3D11ShaderResourceView* srv,
+                       int width, int height);
   void unload_texture(int texture_id);
   bool get_texture_size(int texture_id, int* out_w, int* out_h) const;
 

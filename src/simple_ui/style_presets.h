@@ -245,6 +245,18 @@ struct ImageStylePreset {
   ComponentStyle style_disabled{Color{0.f, 0.f, 0.f, 0.f}, Border{}};
 };
 
+struct CanvasStylePreset {
+  float width = 320.f;
+  float height = 180.f;
+  Color tint{1.f, 1.f, 1.f, 1.f};
+  Color clear_color{0.05f, 0.06f, 0.08f, 1.f};
+  float clear_depth = 1.f;
+  ComponentStyle style_base{Color{0.f, 0.f, 0.f, 0.f}, Border{}};
+  ComponentStyle style_hovered{Color{0.f, 0.f, 0.f, 0.f}, Border{}};
+  ComponentStyle style_active{Color{0.f, 0.f, 0.f, 0.f}, Border{}};
+  ComponentStyle style_disabled{Color{0.f, 0.f, 0.f, 0.f}, Border{}};
+};
+
 struct ContainerStylePreset {
   float width = 200.f;
   float height = 200.f;
@@ -333,6 +345,7 @@ struct UiStylePresets {
   RangeStylePreset range{};
   ProgressBarStylePreset progress_bar{};
   ImageStylePreset image{};
+  CanvasStylePreset canvas{};
   ContainerStylePreset container{};
   ScrollViewStylePreset scroll_view{};
   PanelStylePreset panel{};

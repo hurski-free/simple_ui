@@ -627,6 +627,24 @@ int Renderer::create_texture_rgba(int width, int height,
   return id;
 }
 
+int Renderer::register_texture(ID3D11Texture2D* texture,
+                               ID3D11ShaderResourceView* srv, int width,
+                               int height) {
+  if (!initialized_ || !texture || !srv || width <= 0 || height <= 0) {
+    return -1;
+  }
+  texture->AddRef();
+  srv->AddRef();
+  TextureEntry entry;
+  entry.texture = texture;
+  entry.srv = srv;
+  entry.width = width;
+  entry.height = height;
+  const int id = AllocTextureId();
+  textures_[id] = entry;
+  return id;
+}
+
 int Renderer::load_texture_file(const wchar_t* path) {
   if (!initialized_ || !path) {
     return -1;
@@ -1290,8 +1308,9 @@ void Renderer::EmitTextCommand(ID3D11DeviceContext* context,
 }
 
 void Renderer::GroupCommandsForBatching(std::vector<DrawCommand*>& commands) {
-  // Within each clip run (between PushClip/PopClip barriers), group by pipeline
-  // type so Rect/Text/Shape don't alternate and flush every widget.
+  // Within each clip run AND layer, group by pipeline type so Rect/Text/Shape
+  // don't alternate and flush every widget. Flushing on layer change preserves
+  // Scene layer order (e.g. Canvas Image under Button Rect).
   std::vector<DrawCommand*> rects;
   std::vector<DrawCommand*> shapes;
   std::vector<DrawCommand*> texts;
@@ -1302,6 +1321,9 @@ void Renderer::GroupCommandsForBatching(std::vector<DrawCommand*>& commands) {
   shapes.reserve(32);
   texts.reserve(commands.size());
   images.reserve(8);
+
+  bool have_layer = false;
+  int current_layer = 0;
 
   auto flush_buckets = [&]() {
     // Keep Text runs grouped by atlas pointer so the GPU stays on one SRV.
@@ -1328,8 +1350,14 @@ void Renderer::GroupCommandsForBatching(std::vector<DrawCommand*>& commands) {
     if (cmd->type == DrawCommandType::PushClip ||
         cmd->type == DrawCommandType::PopClip) {
       flush_buckets();
+      have_layer = false;
       rebuilt.push_back(cmd);
       continue;
+    }
+    if (!have_layer || cmd->layer != current_layer) {
+      flush_buckets();
+      current_layer = cmd->layer;
+      have_layer = true;
     }
     switch (cmd->type) {
       case DrawCommandType::Rect:
@@ -1347,6 +1375,7 @@ void Renderer::GroupCommandsForBatching(std::vector<DrawCommand*>& commands) {
         break;
       default:
         flush_buckets();
+        have_layer = false;
         rebuilt.push_back(cmd);
         break;
     }

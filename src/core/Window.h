@@ -41,6 +41,9 @@ public:
   const MouseEvents& GetMouseEvents() const;
   const KeyboardEvents& GetKeyboardEvents() const;
 
+  // Bind the offscreen scene color target (used after Canvas::end_draw, etc.).
+  void BindSceneTarget();
+
 private:
   bool InitWindow(const wchar_t* title, const wchar_t* iconPath);
   bool InitDirectX();
@@ -49,7 +52,6 @@ private:
   bool CreateSceneTargets();
   void ReleaseSceneTargets();
   void ReleaseBlitResources();
-  void BindSceneTarget();
   void BlitSceneToBackbuffer();
   bool ResizeSwapChain(UINT width, UINT height);
   void Cleanup();
