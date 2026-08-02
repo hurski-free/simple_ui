@@ -336,6 +336,7 @@ void Window::BeginFrameInput() {
   mouse_.middle_released = false;
   mouse_.wheel_delta = 0.f;
   mouse_.wheel_consumed = false;
+  mouse_.click_consumed = false;
 
   for (int i = 0; i < KeyboardEvents::kKeyCount; ++i) {
     keyboard_.pressed[i] = false;

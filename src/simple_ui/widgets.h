@@ -537,6 +537,7 @@ public:
   void collect_overlay_draw(std::vector<DrawCommand*>& out) override;
   void handle_events() override;
   void get_layout_size(float& out_w, float& out_h) const override;
+  bool captures_input() const override;
 
   std::wstring title;
   Color title_color{};

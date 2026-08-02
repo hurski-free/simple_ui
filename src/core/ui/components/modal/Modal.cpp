@@ -1,5 +1,7 @@
 #include "Modal.h"
 
+#include <vector>
+
 namespace {
 
 bool Hit(float px, float py, float x, float y, float w, float h) {
@@ -29,7 +31,10 @@ Modal::Modal() {
 Modal::~Modal() = default;
 
 bool Modal::captures_input() const {
-  return open;
+  if (!open) {
+    return false;
+  }
+  return true;
 }
 
 void Modal::LayoutDialog() {
@@ -50,19 +55,22 @@ void Modal::handle_messages(const MouseEvents& mouse,
   LayoutDialog();
 
   const bool over_dialog = Hit(mouse.x, mouse.y, x, y, width, height);
-  if (mouse.left_pressed && !over_dialog && close_on_overlay_click) {
+  if (mouse.left_pressed && !mouse.click_consumed && !over_dialog &&
+      close_on_overlay_click) {
     open = false;
     if (on_close) {
       enqueue_event(on_close);
     }
+    mouse.click_consumed = true;
     return;
   }
 
   const float content_x = x;
   const float content_y = y + title_height;
-  for (Component* child : components) {
+
+  auto forward_child = [&](Component* child) {
     if (!child) {
-      continue;
+      return;
     }
     const float sx = child->x;
     const float sy = child->y;
@@ -72,6 +80,46 @@ void Modal::handle_messages(const MouseEvents& mouse,
     child->handle_messages(mouse, keyboard);
     child->x = sx;
     child->y = sy;
+  };
+
+  bool child_capture = false;
+  for (Component* child : components) {
+    if (child && child->captures_input()) {
+      child_capture = true;
+      break;
+    }
+  }
+  if (child_capture) {
+    std::vector<Component*> capturers;
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+      if (*it && (*it)->captures_input()) {
+        capturers.push_back(*it);
+      }
+    }
+    for (Component* child : capturers) {
+      forward_child(child);
+    }
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+      Component* child = *it;
+      if (!child) {
+        continue;
+      }
+      bool was_capturer = false;
+      for (Component* c : capturers) {
+        if (c == child) {
+          was_capturer = true;
+          break;
+        }
+      }
+      if (!was_capturer) {
+        forward_child(child);
+      }
+    }
+    return;
+  }
+
+  for (auto it = components.rbegin(); it != components.rend(); ++it) {
+    forward_child(*it);
   }
 }
 

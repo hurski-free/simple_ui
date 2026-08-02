@@ -184,10 +184,11 @@ void Range::handle_messages(const MouseEvents& mouse,
     return;
   }
 
-  if (mouse.left_pressed && hovered) {
+  if (mouse.left_pressed && !mouse.click_consumed && hovered) {
     dragging_ = true;
     apply_from_mouse();
     state = ComponentState::Active;
+    mouse.click_consumed = true;
     return;
   }
 

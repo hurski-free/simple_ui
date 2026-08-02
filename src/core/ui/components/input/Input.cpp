@@ -96,13 +96,14 @@ void Input::handle_messages(const MouseEvents& mouse,
 
   const bool hovered = Hit(mouse.x, mouse.y, x, y, width, height);
 
-  if (mouse.left_pressed) {
+  if (mouse.left_pressed && !mouse.click_consumed) {
     focused = hovered;
     if (focused) {
       caret_blink_ = 0.f;
       caret_visible_ = true;
       const float local = mouse.x - x - padding;
       caret_ = CaretIndexAtX(local);
+      mouse.click_consumed = true;
     }
   }
 

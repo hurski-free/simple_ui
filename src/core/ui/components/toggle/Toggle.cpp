@@ -68,10 +68,11 @@ void Toggle::handle_messages(const MouseEvents& mouse,
   float lh = 0.f;
   get_layout_size(lw, lh);
   const bool hovered = Hit(mouse.x, mouse.y, x, y, lw, lh);
-  if (mouse.left_pressed && hovered) {
+  if (mouse.left_pressed && !mouse.click_consumed && hovered) {
     checked = !checked;
     WriteBound();
     enqueue_event(on_click);
+    mouse.click_consumed = true;
   }
   state = hovered ? (mouse.left_down ? ComponentState::Active
                                      : ComponentState::Hovered)

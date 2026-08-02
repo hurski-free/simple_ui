@@ -32,8 +32,9 @@ void Button::handle_messages(const MouseEvents& mouse,
   const bool hovered = mouse.x >= x && mouse.x <= x + width &&
                        mouse.y >= y && mouse.y <= y + height;
 
-  if (mouse.left_pressed && hovered) {
+  if (mouse.left_pressed && !mouse.click_consumed && hovered) {
     press_started_here_ = true;
+    mouse.click_consumed = true;
   }
 
   if (mouse.left_released) {

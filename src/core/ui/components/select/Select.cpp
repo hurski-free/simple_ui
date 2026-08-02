@@ -155,11 +155,13 @@ void Select::handle_messages(const MouseEvents& mouse,
     return;
   }
 
-  if (mouse.left_pressed && over_bar && ContentHeight() > dropdown_height) {
+  if (mouse.left_pressed && !mouse.click_consumed && over_bar &&
+      ContentHeight() > dropdown_height) {
     dragging_scroll_ = true;
     scroll_state_ = ComponentState::Active;
     drag_mouse_anchor_ = mouse.y;
     drag_scroll_anchor_ = scroll_offset_;
+    mouse.click_consumed = true;
     return;
   }
 
@@ -181,19 +183,23 @@ void Select::handle_messages(const MouseEvents& mouse,
     }
   }
 
-  if (mouse.left_pressed) {
+  if (mouse.left_pressed && !mouse.click_consumed) {
     if (over_header) {
       open_ = !open_;
       if (open_) {
         ClampScroll();
       }
+      mouse.click_consumed = true;
     } else if (open_ && over_list && hovered_index_ >= 0) {
       selected = hovered_index_;
       WriteBound();
       open_ = false;
       enqueue_event(on_click);
-    } else if (!over_list && !over_bar) {
+      mouse.click_consumed = true;
+    } else if (open_) {
+      // Dismiss without activating whatever is under the dropdown / click.
       open_ = false;
+      mouse.click_consumed = true;
     }
   }
 

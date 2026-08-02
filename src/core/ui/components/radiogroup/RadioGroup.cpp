@@ -109,13 +109,14 @@ void RadioGroup::handle_messages(const MouseEvents& mouse,
     state = ComponentState::Base;
   }
 
-  if (!mouse.left_pressed || hovered_index_ < 0) {
+  if (!mouse.left_pressed || mouse.click_consumed || hovered_index_ < 0) {
     return;
   }
 
   selected = hovered_index_;
   WriteBound();
   enqueue_event(on_click);
+  mouse.click_consumed = true;
 }
 
 void RadioGroup::build_draw_buffer() {

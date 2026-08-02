@@ -122,10 +122,11 @@ void Checkbox::handle_messages(const MouseEvents& mouse,
   get_layout_size(layout_w, layout_h);
   const bool hovered = Hit(mouse.x, mouse.y, x, y, layout_w, layout_h);
 
-  if (mouse.left_pressed && hovered) {
+  if (mouse.left_pressed && !mouse.click_consumed && hovered) {
     checked = !checked;
     WriteBound();
     enqueue_event(on_click);
+    mouse.click_consumed = true;
   }
 
   if (hovered && mouse.left_down) {

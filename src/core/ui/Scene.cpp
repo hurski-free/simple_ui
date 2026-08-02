@@ -45,40 +45,51 @@ void Scene::handle_messages(UiContext* ctx) {
   const MouseEvents& mouse = ctx->window.GetMouseEvents();
   const KeyboardEvents& keyboard = ctx->window.GetKeyboardEvents();
 
-  bool has_capture = false;
-  for (Component* component : components) {
-    if (component && component->captures_input()) {
-      has_capture = true;
-      break;
+  // Topmost first (high layer, then reverse within layer).
+  // Capturing widgets (open Select, focused TextArea, Modal, ...) run first so
+  // they can consume clicks/wheel before siblings underneath.
+  auto for_each_topmost = [&](auto&& fn) {
+    if (components_sorted && !layers.empty()) {
+      for (auto layer_it = layers.rbegin(); layer_it != layers.rend();
+           ++layer_it) {
+        const std::vector<Component*>& comps = layer_it->components;
+        for (auto it = comps.rbegin(); it != comps.rend(); ++it) {
+          if (*it) {
+            fn(*it);
+          }
+        }
+      }
+    } else {
+      for (auto it = components.rbegin(); it != components.rend(); ++it) {
+        if (*it) {
+          fn(*it);
+        }
+      }
     }
+  };
+
+  // Snapshot capturers up front: a Select may close during its own handler and
+  // must not be dispatched a second time in the same frame.
+  std::vector<Component*> capturers;
+  for_each_topmost([&](Component* component) {
+    if (component->captures_input()) {
+      capturers.push_back(component);
+    }
+  });
+
+  for (Component* component : capturers) {
+    component->ui = ctx;
+    component->handle_messages(mouse, keyboard);
   }
 
-  // Topmost first (high layer, then reverse within layer) so overlapping
-  // containers can consume the wheel before ones underneath.
-  auto dispatch = [&](Component* component) {
-    if (!component) {
+  for_each_topmost([&](Component* component) {
+    if (std::find(capturers.begin(), capturers.end(), component) !=
+        capturers.end()) {
       return;
     }
     component->ui = ctx;
-    if (has_capture && !component->captures_input()) {
-      return;
-    }
     component->handle_messages(mouse, keyboard);
-  };
-
-  if (components_sorted && !layers.empty()) {
-    for (auto layer_it = layers.rbegin(); layer_it != layers.rend();
-         ++layer_it) {
-      const std::vector<Component*>& comps = layer_it->components;
-      for (auto it = comps.rbegin(); it != comps.rend(); ++it) {
-        dispatch(*it);
-      }
-    }
-  } else {
-    for (auto it = components.rbegin(); it != components.rend(); ++it) {
-      dispatch(*it);
-    }
-  }
+  });
 }
 
 void Scene::update(float dt) {

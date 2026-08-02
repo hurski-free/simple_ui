@@ -373,11 +373,12 @@ void TextArea::handle_messages(const MouseEvents& mouse,
     dragging_select_ = false;
   }
 
-  if (mouse.left_pressed) {
+  if (mouse.left_pressed && !mouse.click_consumed) {
     focused = hovered;
     if (focused) {
       dragging_select_ = true;
       PlaceCaretAt(mouse.x - x - padding, mouse.y - y - padding, shift);
+      mouse.click_consumed = true;
     } else {
       ClearSelection();
     }

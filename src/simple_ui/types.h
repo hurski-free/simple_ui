@@ -63,6 +63,9 @@ struct MouseEvents {
   // Cleared each frame with wheel_delta. Mutable so const MouseEvents& handlers
   // can mark consumption without changing the handle_messages signature.
   mutable bool wheel_consumed = false;
+  // Set when a handler consumes the left-button press (e.g. Select dropdown)
+  // so widgets underneath do not also activate on the same click.
+  mutable bool click_consumed = false;
 };
 
 // Per-frame keyboard snapshot. Indexed by virtual-key codes (0..255).

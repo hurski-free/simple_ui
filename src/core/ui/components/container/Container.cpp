@@ -377,9 +377,9 @@ void Container::handle_messages(const MouseEvents& mouse,
     scroll_x_state_ = ComponentState::Base;
     scroll_y_state_ = ComponentState::Base;
     state = over_view ? ComponentState::Hovered : ComponentState::Base;
-    for (Component* child : components) {
-      if (!child || !child->captures_input()) {
-        continue;
+    auto forward = [&](Component* child) {
+      if (!child) {
+        return;
       }
       const float saved_x = child->x;
       const float saved_y = child->y;
@@ -389,6 +389,32 @@ void Container::handle_messages(const MouseEvents& mouse,
       child->handle_messages(mouse, keyboard);
       child->x = saved_x;
       child->y = saved_y;
+    };
+    // Snapshot capturers so a Select that closes mid-handler is not re-dispatched.
+    std::vector<Component*> capturers;
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+      if (*it && (*it)->captures_input()) {
+        capturers.push_back(*it);
+      }
+    }
+    for (Component* child : capturers) {
+      forward(child);
+    }
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+      Component* child = *it;
+      if (!child) {
+        continue;
+      }
+      bool was_capturer = false;
+      for (Component* c : capturers) {
+        if (c == child) {
+          was_capturer = true;
+          break;
+        }
+      }
+      if (!was_capturer) {
+        forward(child);
+      }
     }
     return;
   }

@@ -1,5 +1,7 @@
 #include "Panel.h"
 
+#include <vector>
+
 namespace {
 
 bool Hit(float px, float py, float x, float y, float w, float h) {
@@ -29,9 +31,75 @@ void Panel::get_layout_size(float& out_w, float& out_h) const {
   out_h = height;
 }
 
+bool Panel::captures_input() const {
+  for (Component* child : components) {
+    if (child && child->captures_input()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void Panel::handle_messages(const MouseEvents& mouse,
                             const KeyboardEvents& keyboard) {
   if (disabled) {
+    return;
+  }
+
+  const float content_x = x;
+  const float content_y = y + title_height;
+
+  auto forward_child = [&](Component* child) {
+    if (!child) {
+      return;
+    }
+    const float sx = child->x;
+    const float sy = child->y;
+    child->x = content_x + sx;
+    child->y = content_y + sy;
+    child->ui = ui;
+    child->handle_messages(mouse, keyboard);
+    child->x = sx;
+    child->y = sy;
+  };
+
+  // Prefer capturing children (e.g. open Select) so dropdown clicks do not
+  // fall through to siblings underneath.
+  bool child_capture = false;
+  for (Component* child : components) {
+    if (child && child->captures_input()) {
+      child_capture = true;
+      break;
+    }
+  }
+  if (child_capture) {
+    std::vector<Component*> capturers;
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+      if (*it && (*it)->captures_input()) {
+        capturers.push_back(*it);
+      }
+    }
+    for (Component* child : capturers) {
+      forward_child(child);
+    }
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+      Component* child = *it;
+      if (!child) {
+        continue;
+      }
+      bool was_capturer = false;
+      for (Component* c : capturers) {
+        if (c == child) {
+          was_capturer = true;
+          break;
+        }
+      }
+      if (!was_capturer) {
+        forward_child(child);
+      }
+    }
+    state = Hit(mouse.x, mouse.y, x, y, width, height) ? ComponentState::Hovered
+                                                       : ComponentState::Base;
     return;
   }
 
@@ -51,36 +119,26 @@ void Panel::handle_messages(const MouseEvents& mouse,
     y = mouse.y - drag_dy_;
   }
 
-  if (mouse.left_pressed && over_close) {
+  if (mouse.left_pressed && !mouse.click_consumed && over_close) {
     if (on_close) {
       enqueue_event(on_close);
     }
+    mouse.click_consumed = true;
     return;
   }
 
-  if (mouse.left_pressed && over_title && draggable) {
+  if (mouse.left_pressed && !mouse.click_consumed && over_title && draggable) {
     dragging_ = true;
     drag_dx_ = mouse.x - x;
     drag_dy_ = mouse.y - y;
+    mouse.click_consumed = true;
   }
 
   state = Hit(mouse.x, mouse.y, x, y, width, height) ? ComponentState::Hovered
                                                      : ComponentState::Base;
 
-  const float content_x = x;
-  const float content_y = y + title_height;
-  for (Component* child : components) {
-    if (!child) {
-      continue;
-    }
-    const float sx = child->x;
-    const float sy = child->y;
-    child->x = content_x + sx;
-    child->y = content_y + sy;
-    child->ui = ui;
-    child->handle_messages(mouse, keyboard);
-    child->x = sx;
-    child->y = sy;
+  for (auto it = components.rbegin(); it != components.rend(); ++it) {
+    forward_child(*it);
   }
 }
 
