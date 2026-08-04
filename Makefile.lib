@@ -10,8 +10,13 @@ PCH_DIR  := build/pch
 # Release: optimize for speed, strip symbols, GC unused sections.
 CXXFLAGS := -DWINDOW_EXPORTS -DNDEBUG -O2 -ffunction-sections -fdata-sections \
 	-MMD -MP -I$(SRC_DIR)
-LDFLAGS  := -shared -s -Wl,--gc-sections
-LDLIBS   := -ld3d11 -ldxgi -ld3dcompiler -lgdi32 -luser32 -lole32 -lwindowscodecs
+# Embed MinGW C/C++/pthread runtime into the DLL so libgcc_s_seh-1.dll,
+# libstdc++-6.dll and libwinpthread-1.dll are not required next to it.
+# Do not use plain -static with -shared (conflicts). Explicit -Bstatic of
+# libstdc++/pthread/gcc is needed so winpthread does not stay dynamic.
+LDFLAGS  := -shared -s -Wl,--gc-sections -static-libgcc -static-libstdc++
+LDLIBS   := -Wl,-Bstatic -lstdc++ -lpthread -lgcc_eh -lgcc -Wl,-Bdynamic \
+	-ld3d11 -ldxgi -ld3dcompiler -lgdi32 -luser32 -lole32 -lwindowscodecs
 IMPLIB   := -Wl,--out-implib,$(LIB_DIR)/simple_ui.lib
 
 PCH_HDR  := $(SRC_DIR)/pch.h
@@ -66,7 +71,7 @@ all: $(DLL) $(HDR)
 
 $(FLAGS_STAMP): FORCE
 	@$(call mk_dir,$(OBJ_DIR))
-	@echo $(CXXFLAGS) $(LDFLAGS)> $(FLAGS_STAMP).tmp
+	@echo $(CXXFLAGS) $(LDFLAGS) $(LDLIBS)> $(FLAGS_STAMP).tmp
 	@cmd /C "fc /b $(call to_win,$(FLAGS_STAMP).tmp) $(call to_win,$(FLAGS_STAMP)) >nul 2>&1 || copy /Y $(call to_win,$(FLAGS_STAMP).tmp) $(call to_win,$(FLAGS_STAMP)) >nul"
 	@cmd /C "del /Q $(call to_win,$(FLAGS_STAMP).tmp) >nul 2>&1"
 
@@ -79,7 +84,7 @@ $(HDR): $(SRC_DIR)/simple_ui.h $(wildcard $(SRC_DIR)/simple_ui/*.h)
 	@echo Built $(HDR)
 	@echo Built $(HDR_DIR)\*.h
 
-$(DLL): $(OBJS)
+$(DLL): $(OBJS) $(FLAGS_STAMP)
 	@$(call mk_dir,$(LIB_DIR))
 	@echo Linking $@...
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS) $(IMPLIB)
