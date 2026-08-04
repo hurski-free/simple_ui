@@ -21,9 +21,16 @@ public:
 
   // Preferred client size for Windowed (and stored for returning to Windowed).
   // When already Windowed, resizes the window and swap-chain immediately.
+  // Does not change logical resolution.
   bool SetScreenSize(int width, int height);
   int GetWindowedWidth() const;
   int GetWindowedHeight() const;
+
+  // Logical render resolution (offscreen scene RT + UI/mouse coordinates).
+  // Stretch-blitted onto the swap-chain; does not resize the OS window.
+  bool SetResolution(int width, int height);
+  int GetResolutionWidth() const;
+  int GetResolutionHeight() const;
 
   bool SetMsaaSamples(int samples);
   int GetMsaaSamples() const;
@@ -36,8 +43,12 @@ public:
   HWND GetHwnd() const;
   ID3D11Device* GetDevice() const;
   ID3D11DeviceContext* GetContext() const;
+  // Logical resolution (scene / UI). Prefer GetResolutionWidth/Height by name.
   int GetWidth() const;
   int GetHeight() const;
+  // Current OS window / swap-chain backbuffer size.
+  int GetWindowWidth() const;
+  int GetWindowHeight() const;
   const MouseEvents& GetMouseEvents() const;
   const KeyboardEvents& GetKeyboardEvents() const;
 
@@ -57,6 +68,7 @@ private:
   void Cleanup();
   void BeginFrameInput();
   void HandleInputMessage(UINT msg, WPARAM wParam, LPARAM lParam);
+  void SetMouseFromClient(float client_x, float client_y);
   static bool RegisterWindowClass();
   static int NormalizeMsaaSamples(int samples);
 
@@ -64,8 +76,12 @@ private:
                                   LPARAM lParam);
 
   HWND hwnd_ = nullptr;
+  // OS window / swap-chain backbuffer size (presentation).
   int width_ = 0;
   int height_ = 0;
+  // Logical scene RT + UI coordinate space.
+  int resolution_width_ = 0;
+  int resolution_height_ = 0;
   int windowed_width_ = 0;
   int windowed_height_ = 0;
   ScreenMode screenMode_ = ScreenMode::Windowed;

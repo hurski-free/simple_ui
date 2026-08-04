@@ -457,6 +457,12 @@ bool Renderer::CreateResources() {
     return false;
   }
 
+  samp.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+  hr = device_->CreateSamplerState(&samp, &image_nearest_sampler_);
+  if (FAILED(hr)) {
+    return false;
+  }
+
   D3D11_BLEND_DESC blend{};
   blend.RenderTarget[0].BlendEnable = TRUE;
   blend.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
@@ -503,6 +509,10 @@ void Renderer::ReleaseResources() {
   if (font_sampler_) {
     font_sampler_->Release();
     font_sampler_ = nullptr;
+  }
+  if (image_nearest_sampler_) {
+    image_nearest_sampler_->Release();
+    image_nearest_sampler_ = nullptr;
   }
   if (blend_state_) {
     blend_state_->Release();
@@ -895,11 +905,12 @@ void Renderer::BindShapePipeline(ID3D11DeviceContext* context) {
 }
 
 void Renderer::BindImagePipeline(ID3D11DeviceContext* context,
-                                 ID3D11ShaderResourceView* srv) {
+                                 ID3D11ShaderResourceView* srv,
+                                 ID3D11SamplerState* sampler) {
   image_shader_.bind(context);
   context->IASetInputLayout(image_layout_);
   context->PSSetShaderResources(0, 1, &srv);
-  context->PSSetSamplers(0, 1, &font_sampler_);
+  context->PSSetSamplers(0, 1, &sampler);
   UINT stride = sizeof(TextVertex);
   UINT offset = 0;
   context->IASetVertexBuffers(0, 1, &image_vb_, &stride, &offset);
@@ -940,7 +951,11 @@ void Renderer::DrawImageCommand(ID3D11DeviceContext* context,
   std::memcpy(mapped.pData, quad, sizeof(quad));
   context->Unmap(image_vb_, 0);
 
-  BindImagePipeline(context, it->second.srv);
+  ID3D11SamplerState* sampler = font_sampler_;
+  if (cmd.image_filter == ImageFilter::Nearest && image_nearest_sampler_) {
+    sampler = image_nearest_sampler_;
+  }
+  BindImagePipeline(context, it->second.srv, sampler);
   context->Draw(6, 0);
 }
 

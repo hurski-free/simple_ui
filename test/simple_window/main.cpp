@@ -34,9 +34,22 @@ const ScreenMode kScreenModes[] = {
     ScreenMode::Fullscreen,
 };
 
+struct MsaaOption {
+  int samples = 1;
+  const wchar_t* label = nullptr;
+};
+
+const MsaaOption kMsaaOptions[] = {
+    {1, L"Off"},
+    {2, L"2x"},
+    {4, L"4x"},
+    {8, L"8x"},
+};
+
 struct AppSettings {
   int resolution_index = 0;
   int screen_mode_index = 0;
+  int msaa_index = 2;  // default 4x (matches ScreenSettings)
   float brightness = 100.f;
 };
 
@@ -464,20 +477,38 @@ int FindScreenModeIndex(ScreenMode mode) {
   return 0;
 }
 
+int FindMsaaIndex(int samples) {
+  const int count =
+      static_cast<int>(sizeof(kMsaaOptions) / sizeof(kMsaaOptions[0]));
+  for (int i = 0; i < count; ++i) {
+    if (kMsaaOptions[i].samples == samples) {
+      return i;
+    }
+  }
+  return 0;
+}
+
 bool SettingsValid(const AppSettings& s) {
   const int res_count =
       static_cast<int>(sizeof(kResolutions) / sizeof(kResolutions[0]));
   const int mode_count =
       static_cast<int>(sizeof(kScreenModes) / sizeof(kScreenModes[0]));
+  const int msaa_count =
+      static_cast<int>(sizeof(kMsaaOptions) / sizeof(kMsaaOptions[0]));
   return s.resolution_index >= 0 && s.resolution_index < res_count &&
-         s.screen_mode_index >= 0 && s.screen_mode_index < mode_count;
+         s.screen_mode_index >= 0 && s.screen_mode_index < mode_count &&
+         s.msaa_index >= 0 && s.msaa_index < msaa_count;
 }
 
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
+  // Window stays 1280x720 in Windowed; Borderless/Fullscreen use the monitor.
+  // Resolution (scene RT / UI space) is independent and chosen in Settings.
   const ScreenSettings screen{
       ScreenMode::Windowed,
+      1280,
+      720,
       1280,
       720,
   };
@@ -501,9 +532,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   Scene* active_scene = &main_menu;
 
   AppSettings applied;
-  applied.resolution_index =
-      FindResolutionIndex(ui_get_width(ctx), ui_get_height(ctx));
+  applied.resolution_index = FindResolutionIndex(ui_get_resolution_width(ctx),
+                                                 ui_get_resolution_height(ctx));
   applied.screen_mode_index = FindScreenModeIndex(ui_get_screen_mode(ctx));
+  applied.msaa_index = FindMsaaIndex(ui_get_msaa_samples(ctx));
   applied.brightness = 100.f;
 
   AppSettings draft = applied;
@@ -581,6 +613,23 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   screen_mode.options = {L"Windowed", L"Borderless", L"Fullscreen"};
   screen_mode.bind_data(&draft.screen_mode_index);
 
+  Label msaa_label;
+  msaa_label.text = L"MSAA";
+  msaa_label.width = 220.f;
+  msaa_label.height = 28.f;
+  msaa_label.color = {0.9f, 0.93f, 1.f, 1.f};
+  msaa_label.font_size = 20.f;
+
+  Select msaa;
+  msaa.width = 280.f;
+  msaa.height = 40.f;
+  msaa.dropdown_height = 140.f;
+  msaa.font_size = 20.f;
+  for (const MsaaOption& opt : kMsaaOptions) {
+    msaa.options.push_back(opt.label);
+  }
+  msaa.bind_data(&draft.msaa_index);
+
   Label brightness_label;
   brightness_label.text = L"Brightness";
   brightness_label.width = 220.f;
@@ -614,6 +663,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   auto sync_widgets_from_draft = [&]() {
     resolution.selected = draft.resolution_index;
     screen_mode.selected = draft.screen_mode_index;
+    msaa.selected = draft.msaa_index;
     brightness_slider.value = draft.brightness;
   };
 
@@ -670,6 +720,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     screen_mode.y = cy;
     cy += screen_mode.height + 24.f;
 
+    msaa_label.x = field_x;
+    msaa_label.y = cy;
+    cy += msaa_label.height + 8.f;
+    msaa.x = field_x;
+    msaa.y = cy;
+    cy += msaa.height + 24.f;
+
     brightness_label.x = field_x;
     brightness_label.y = cy;
     cy += brightness_label.height + 8.f;
@@ -700,15 +757,24 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 
     const ResolutionOption& res = kResolutions[applied.resolution_index];
     const ScreenMode mode = kScreenModes[applied.screen_mode_index];
+    const int msaa_samples = kMsaaOptions[applied.msaa_index].samples;
     ui_set_brightness(ctx, applied.brightness / 100.f);
-    ui_set_screen_size(ctx, res.width, res.height);
+    // Resolution changes the scene texture / UI space, not the OS window.
+    ui_set_resolution(ctx, res.width, res.height);
+    // Windowed presentation size is fixed at 1280x720; other modes fill the
+    // monitor as before.
+    if (mode == ScreenMode::Windowed) {
+      ui_set_screen_size(ctx, 1280, 720);
+    }
     ui_set_screen_mode(ctx, mode);
+    ui_set_msaa_samples(ctx, msaa_samples);
     layout_ui();
   };
 
-  settings.components = {&settings_title,   &resolution_label, &resolution,
-                         &screen_mode_label, &screen_mode,     &brightness_label,
-                         &brightness_slider, &btn_back,        &btn_apply};
+  settings.components = {&settings_title,    &resolution_label, &resolution,
+                         &screen_mode_label, &screen_mode,      &msaa_label,
+                         &msaa,              &brightness_label, &brightness_slider,
+                         &btn_back,          &btn_apply};
   settings.prepare_scene();
 
   layout_ui();

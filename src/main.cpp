@@ -116,11 +116,19 @@ ID3D11DeviceContext* ui_get_device_context(const UiContext* ctx) {
 }
 
 int ui_get_width(const UiContext* ctx) {
-  return ctx ? ctx->window.GetWidth() : 0;
+  return ctx ? ctx->window.GetResolutionWidth() : 0;
 }
 
 int ui_get_height(const UiContext* ctx) {
-  return ctx ? ctx->window.GetHeight() : 0;
+  return ctx ? ctx->window.GetResolutionHeight() : 0;
+}
+
+int ui_get_window_width(const UiContext* ctx) {
+  return ctx ? ctx->window.GetWindowWidth() : 0;
+}
+
+int ui_get_window_height(const UiContext* ctx) {
+  return ctx ? ctx->window.GetWindowHeight() : 0;
 }
 
 ScreenMode ui_get_screen_mode(const UiContext* ctx) {
@@ -139,6 +147,21 @@ bool ui_set_screen_size(UiContext* ctx, int width, int height) {
     return false;
   }
   return ctx->window.SetScreenSize(width, height);
+}
+
+bool ui_set_resolution(UiContext* ctx, int width, int height) {
+  if (!ctx) {
+    return false;
+  }
+  return ctx->window.SetResolution(width, height);
+}
+
+int ui_get_resolution_width(const UiContext* ctx) {
+  return ctx ? ctx->window.GetResolutionWidth() : 0;
+}
+
+int ui_get_resolution_height(const UiContext* ctx) {
+  return ctx ? ctx->window.GetResolutionHeight() : 0;
 }
 
 bool ui_set_msaa_samples(UiContext* ctx, int samples) {

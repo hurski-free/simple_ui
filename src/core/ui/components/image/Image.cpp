@@ -5,6 +5,7 @@ Image::Image() {
   width = p.width;
   height = p.height;
   tint = p.tint;
+  filter = p.filter;
   style_base = p.style_base;
   style_hovered = p.style_hovered;
   style_active = p.style_active;
@@ -36,5 +37,6 @@ void Image::build_draw_buffer() {
   cmd.v0 = v0;
   cmd.u1 = u1;
   cmd.v1 = v1;
+  cmd.image_filter = filter;
   cmd.text.clear();
 }

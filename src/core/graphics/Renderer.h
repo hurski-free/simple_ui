@@ -100,7 +100,8 @@ private:
                         ID3D11ShaderResourceView* font_srv);
   void BindShapePipeline(ID3D11DeviceContext* context);
   void BindImagePipeline(ID3D11DeviceContext* context,
-                         ID3D11ShaderResourceView* srv);
+                         ID3D11ShaderResourceView* srv,
+                         ID3D11SamplerState* sampler);
   const FontAtlas* ResolveAtlas(const DrawCommand& cmd) const;
   ID3D11ShaderResourceView* FontSrv(const FontAtlas* atlas) const;
   float GlyphAdvance(char32_t cp) const;
@@ -134,6 +135,8 @@ private:
   ID3D11BlendState* blend_state_ = nullptr;
   ID3D11RasterizerState* raster_state_ = nullptr;
   ID3D11SamplerState* font_sampler_ = nullptr;
+  // Image sampling: Linear reuses font_sampler_; Nearest uses this.
+  ID3D11SamplerState* image_nearest_sampler_ = nullptr;
   const FontAtlas* default_font_atlas_ = nullptr;
   const FontAtlas* active_font_atlas_ = nullptr;
   const FontAtlas* text_batch_atlas_ = nullptr;

@@ -80,6 +80,15 @@ Window::Window(const wchar_t* title, const ScreenSettings* screenSettings,
       break;
   }
 
+  if (screenSettings->resolution_width > 0 &&
+      screenSettings->resolution_height > 0) {
+    resolution_width_ = screenSettings->resolution_width;
+    resolution_height_ = screenSettings->resolution_height;
+  } else {
+    resolution_width_ = width_;
+    resolution_height_ = height_;
+  }
+
   if (!InitWindow(title, iconPath) || !InitDirectX()) {
     Cleanup();
   }
@@ -217,8 +226,9 @@ bool Window::ResizeSwapChain(UINT width, UINT height) {
     return false;
   }
 
+  // Only the presentation backbuffer follows the OS window. Scene RT size is
+  // owned by resolution_* and must not be reset here.
   context_->OMSetRenderTargets(0, nullptr, nullptr);
-  ReleaseSceneTargets();
   if (backbuffer_rtv_) {
     backbuffer_rtv_->Release();
     backbuffer_rtv_ = nullptr;
@@ -235,7 +245,7 @@ bool Window::ResizeSwapChain(UINT width, UINT height) {
   width_ = static_cast<int>(desc.BufferDesc.Width);
   height_ = static_cast<int>(desc.BufferDesc.Height);
 
-  if (!CreateBackbufferRtv() || !CreateSceneTargets()) {
+  if (!CreateBackbufferRtv()) {
     return false;
   }
 
@@ -312,11 +322,45 @@ ID3D11DeviceContext* Window::GetContext() const {
 }
 
 int Window::GetWidth() const {
-  return width_;
+  return resolution_width_;
 }
 
 int Window::GetHeight() const {
+  return resolution_height_;
+}
+
+int Window::GetWindowWidth() const {
+  return width_;
+}
+
+int Window::GetWindowHeight() const {
   return height_;
+}
+
+int Window::GetResolutionWidth() const {
+  return resolution_width_;
+}
+
+int Window::GetResolutionHeight() const {
+  return resolution_height_;
+}
+
+bool Window::SetResolution(int width, int height) {
+  if (!IsValid() || width <= 0 || height <= 0) {
+    return false;
+  }
+  if (width == resolution_width_ && height == resolution_height_ &&
+      scene_rtv_) {
+    return true;
+  }
+
+  resolution_width_ = width;
+  resolution_height_ = height;
+  if (!CreateSceneTargets()) {
+    return false;
+  }
+  BindSceneTarget();
+  return true;
 }
 
 const MouseEvents& Window::GetMouseEvents() const {
@@ -345,11 +389,23 @@ void Window::BeginFrameInput() {
   keyboard_.char_count = 0;
 }
 
+void Window::SetMouseFromClient(float client_x, float client_y) {
+  if (width_ > 0 && height_ > 0) {
+    mouse_.x = client_x * (static_cast<float>(resolution_width_) /
+                           static_cast<float>(width_));
+    mouse_.y = client_y * (static_cast<float>(resolution_height_) /
+                           static_cast<float>(height_));
+  } else {
+    mouse_.x = client_x;
+    mouse_.y = client_y;
+  }
+}
+
 void Window::HandleInputMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
   switch (msg) {
     case WM_MOUSEMOVE:
-      mouse_.x = static_cast<float>(static_cast<short>(LOWORD(lParam)));
-      mouse_.y = static_cast<float>(static_cast<short>(HIWORD(lParam)));
+      SetMouseFromClient(static_cast<float>(static_cast<short>(LOWORD(lParam))),
+                         static_cast<float>(static_cast<short>(HIWORD(lParam))));
       break;
     case WM_LBUTTONDOWN:
       mouse_.left_down = true;
@@ -602,7 +658,7 @@ void Window::ReleaseSceneTargets() {
 
 bool Window::CreateSceneTargets() {
   ReleaseSceneTargets();
-  if (!device_ || width_ <= 0 || height_ <= 0) {
+  if (!device_ || resolution_width_ <= 0 || resolution_height_ <= 0) {
     return false;
   }
 
@@ -628,10 +684,10 @@ bool Window::CreateSceneTargets() {
   }
   msaa_samples_ = static_cast<int>(sample_count);
 
-  // Always render UI into an offscreen color target (OpenGL-FBO style).
+  // Always render UI into an offscreen color target sized to logical resolution.
   D3D11_TEXTURE2D_DESC td{};
-  td.Width = static_cast<UINT>(width_);
-  td.Height = static_cast<UINT>(height_);
+  td.Width = static_cast<UINT>(resolution_width_);
+  td.Height = static_cast<UINT>(resolution_height_);
   td.MipLevels = 1;
   td.ArraySize = 1;
   td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -755,8 +811,8 @@ void Window::BindSceneTarget() {
   context_->OMSetRenderTargets(1, &scene_rtv_, nullptr);
 
   D3D11_VIEWPORT vp{};
-  vp.Width = static_cast<float>(width_);
-  vp.Height = static_cast<float>(height_);
+  vp.Width = static_cast<float>(resolution_width_);
+  vp.Height = static_cast<float>(resolution_height_);
   vp.MinDepth = 0.0f;
   vp.MaxDepth = 1.0f;
   context_->RSSetViewports(1, &vp);
