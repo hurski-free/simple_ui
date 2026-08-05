@@ -536,20 +536,36 @@ bool Window::InitWindow(const wchar_t* title, const wchar_t* iconPath) {
     return false;
   }
 
-  if (iconPath) {
+  // Prefer the host .exe embedded icon (ID 1) so Task Manager / taskbar use it
+  // even when the process CWD does not contain icon.ico. Fall back to a file.
+  const HINSTANCE exe_module = GetModuleHandleW(nullptr);
+  const int cx_big = GetSystemMetrics(SM_CXICON);
+  const int cy_big = GetSystemMetrics(SM_CYICON);
+  const int cx_sm = GetSystemMetrics(SM_CXSMICON);
+  const int cy_sm = GetSystemMetrics(SM_CYSMICON);
+
+  if (exe_module) {
     iconBig_ = static_cast<HICON>(LoadImageW(
-        nullptr, iconPath, IMAGE_ICON, GetSystemMetrics(SM_CXICON),
-        GetSystemMetrics(SM_CYICON), LR_LOADFROMFILE));
+        exe_module, MAKEINTRESOURCEW(1), IMAGE_ICON, cx_big, cy_big, 0));
     iconSmall_ = static_cast<HICON>(LoadImageW(
-        nullptr, iconPath, IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
-        GetSystemMetrics(SM_CYSMICON), LR_LOADFROMFILE));
-    if (iconBig_) {
-      SendMessageW(hwnd_, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(iconBig_));
+        exe_module, MAKEINTRESOURCEW(1), IMAGE_ICON, cx_sm, cy_sm, 0));
+  }
+  if ((!iconBig_ || !iconSmall_) && iconPath && iconPath[0]) {
+    if (!iconBig_) {
+      iconBig_ = static_cast<HICON>(LoadImageW(
+          nullptr, iconPath, IMAGE_ICON, cx_big, cy_big, LR_LOADFROMFILE));
     }
-    if (iconSmall_) {
-      SendMessageW(hwnd_, WM_SETICON, ICON_SMALL,
-                   reinterpret_cast<LPARAM>(iconSmall_));
+    if (!iconSmall_) {
+      iconSmall_ = static_cast<HICON>(LoadImageW(
+          nullptr, iconPath, IMAGE_ICON, cx_sm, cy_sm, LR_LOADFROMFILE));
     }
+  }
+  if (iconBig_) {
+    SendMessageW(hwnd_, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(iconBig_));
+  }
+  if (iconSmall_) {
+    SendMessageW(hwnd_, WM_SETICON, ICON_SMALL,
+                 reinterpret_cast<LPARAM>(iconSmall_));
   }
 
   ShowWindow(hwnd_, SW_SHOW);
